@@ -2,17 +2,17 @@
 
 ## Development Workflow
 
-All feature work follows the Maximum Skill Workflow defined in:
-`docs/plans/2026-02-21-maximum-skill-workflow-design.md`
+All feature work follows the Simple Workflow defined in:
+`docs/plans/2026-02-23-simple-workflow-rewrite-design.md`
 
 **Phase entry point per situation:**
 
-| Situation              | Enter at                                        |
-| ---------------------- | ----------------------------------------------- |
-| Brand new feature      | Phase 1 · Discovery                             |
-| Existing spec / ticket | Phase 3 · Design                                |
-| Bug in existing code   | Phase 4 · Implementation (systematic-debugging) |
-| PR ready for review    | Phase 5 · Validation                            |
+| Situation              | Enter at                                   |
+| ---------------------- | ------------------------------------------ |
+| Brand new feature      | Phase 1 · Discover                         |
+| Existing spec / ticket | Phase 2 · Plan                             |
+| Bug in existing code   | Phase 3 · Implement (systematic-debugging) |
+| Tests failing          | Phase 4 · Test                             |
 
 ## Monorepo Package Boundaries
 
@@ -87,11 +87,10 @@ Key skills for daily use:
 - `superpowers:verification-before-completion` — before claiming done
 - `superpowers:systematic-debugging` — before any bug fix attempt
 
-Phase-specific skills are defined in the Maximum Skill Workflow document.
+Phase-specific skills are defined in the Simple Workflow document.
 
-## Known Workflow Gaps
+## Known Workflow Gap
 
-Two phases currently lack explicit hard gates — understand these before skipping them:
+One phase currently lacks an explicit hard gate — understand this before skipping it:
 
-- **Phase 2 (Isolation) has no enforcement gate** — All feature development should occur in an isolated git worktree created in Phase 2; no implementation commits should be made on the main branch directly.
-- **Phase 4 (Code review sign-off) has no blocking mechanism** — Critical issues from code review must be resolved or explicitly accepted by code-architect before moving to the next task; dismissing feedback without justification blocks task closure by convention, not by tooling.
+- **Phase 3 (Code review sign-off) has no blocking mechanism** — Critical issues from code review must be resolved or explicitly accepted before moving to the next task; dismissing feedback without justification blocks task closure by convention, not by tooling.
