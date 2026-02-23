@@ -512,3 +512,197 @@ Next step:    /colloquium:project → continue → <slug>
 ```
 
 ---
+
+## Flow 2: Develop (continue existing project)
+
+### Session Start
+
+1. Read `.claude/projects/<slug>/project-state.json`.
+2. Count passing tests in `feature_list.json`:
+   ```bash
+   grep -c '"passes": true' .claude/projects/<slug>/feature_list.json
+   ```
+3. Display session start banner:
+
+```
+════════════════════════════════════════════════════════════════
+▶ DEVELOP SESSION — [name]
+════════════════════════════════════════════════════════════════
+Progress:     [passingTests] / [totalTests] tests passing
+Next test:    #[currentTestIndex] — [description]
+Session:      #[sessionCount + 1]
+════════════════════════════════════════════════════════════════
+```
+
+4. Run all apps in dev mode:
+   ```bash
+   pnpm turbo dev
+   ```
+   Wait for all apps to report "ready" before proceeding.
+
+---
+
+### Regression Verification (mandatory before new work)
+
+Pick 1–2 of the most recently-passing tests from `feature_list.json`. Verify them via browser automation (Playwright MCP):
+
+- Navigate to the app in a real browser
+- Execute the test steps literally
+- Take a screenshot at the final step
+
+**If a regression is found:**
+
+- Set that test's `"passes"` back to `false` in `feature_list.json`
+- Fix the regression BEFORE implementing any new feature
+- Commit the fix: `fix(<slug>): restore [description]`
+- Re-verify before moving to new work
+
+---
+
+### Per-Test Inner Cycle
+
+Pick the test at `currentTestIndex` from `feature_list.json` (the first one with `"passes": false`).
+
+Display task banner:
+
+```
+════════════════════════════════════════════════════════════════
+▶ TEST [currentTestIndex + 1] of [totalTests]
+════════════════════════════════════════════════════════════════
+Description:  [test description]
+Category:     [functional | style]
+Steps:        [count] steps
+════════════════════════════════════════════════════════════════
+```
+
+---
+
+#### Step 3a — context7: pull library docs
+
+Use `mcp__plugin_context7_context7__resolve-library-id` + `mcp__plugin_context7_context7__query-docs` for the specific library method this test will exercise.
+
+Do not skip even if the library was fetched in a prior session.
+
+---
+
+#### Step 3b — TDD: Red → Loop → Green
+
+Use Skill tool: `superpowers:test-driven-development`
+
+Enforced sequence:
+
+1. Write the failing test in the correct test directory for the package being modified
+2. Run the test — confirm RED. If it passes immediately, the test is wrong; rewrite it.
+3. Write the minimal implementation
+4. Run the test:
+   - RED → adjust implementation, return to step 3
+   - Stuck 3+ consecutive attempts → trigger Step 3c
+   - GREEN → continue to step 4
+5. Refactor with tests remaining green
+
+---
+
+#### Step 3c — systematic-debugging (only if stuck 3+ consecutive times)
+
+Use Skill tool: `superpowers:systematic-debugging`
+
+If this also fails to resolve: STOP. Return to Phase B2 spec review — the feature may be under-specified.
+
+---
+
+#### Step 3d — code-simplifier: post-green cleanup
+
+Use Task tool with subagent_type `code-simplifier:code-simplifier`.
+
+Only runs after tests are GREEN. Run tests again after simplification — they must remain GREEN.
+
+---
+
+#### Step 3e — code review: request
+
+Use Skill tool: `superpowers:requesting-code-review`
+
+Critical issues must be resolved or explicitly accepted before proceeding.
+
+---
+
+#### Step 3f — code review: receive
+
+Use Skill tool: `superpowers:receiving-code-review`
+
+Never implement feedback blindly. Push back with reasoning if suggestions violate YAGNI or monorepo package boundary rules.
+
+---
+
+### After each test: Browser verification + state update
+
+**Browser verification (MANDATORY):**
+
+Use Playwright MCP to execute the test steps literally through the UI:
+
+- Navigate to the app
+- Perform each step in `"steps"` array
+- Take a screenshot at each key state
+- Assert the expected outcome
+
+Only after browser verification passes:
+
+1. Set `"passes": true` for this test in `feature_list.json`
+2. Commit:
+   ```bash
+   git add .
+   git commit -m "feat(<slug>): implement [test description] — test #[index] passing"
+   ```
+3. Update `claude-progress.txt` — append a new entry for this session:
+   ```
+   [x] Test #[index]: [description] → PASSING
+   ```
+4. Update `project-state.json`:
+   - Increment `currentTestIndex`
+   - Increment `passingTests`
+   - Update `lastUpdated`
+
+5. Display:
+
+```
+════════════════════════════════════════════════════════════════
+✅ Test [N] complete — [description]
+════════════════════════════════════════════════════════════════
+Progress:  [passingTests] / [totalTests] passing
+State saved.
+════════════════════════════════════════════════════════════════
+```
+
+6. Ask: "Continue to test [N+1] or stop here?"
+   - Continue → next test inner cycle
+   - Stop → display session-end banner:
+
+```
+════════════════════════════════════════════════════════════════
+⏸ SESSION PAUSED — [name]
+════════════════════════════════════════════════════════════════
+Progress:  [passingTests] / [totalTests] tests passing
+State saved: .claude/projects/<slug>/project-state.json
+Resume with: /colloquium:project
+════════════════════════════════════════════════════════════════
+```
+
+---
+
+### Project Complete
+
+When `passingTests === totalTests`:
+
+```
+════════════════════════════════════════════════════════════════
+🎉 PROJECT COMPLETE — [name]
+════════════════════════════════════════════════════════════════
+All 200 / 200 tests passing.
+Sessions: [sessionCount]
+State preserved at: .claude/projects/<slug>/project-state.json
+
+Human handles merge / deployment.
+════════════════════════════════════════════════════════════════
+```
+
+---
