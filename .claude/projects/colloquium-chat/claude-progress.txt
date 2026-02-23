@@ -66,6 +66,23 @@ Turborepo typecheck: 4/4 tasks passing ✅
   claude-progress.txt               ← this file
 
 ================================================================================
+SESSION 2 — 2026-02-23
+================================================================================
+
+[x] Test #1: Backend server starts and health check endpoint responds with 200 OK → PASSING
+[x] Test #2: Register form (React Hook Form + Zod) submits valid fields and redirects on success → PASSING
+    - Drizzle ORM schema (users + refresh_tokens tables, inline DDL via prepare().run())
+    - POST /api/auth/register: bcrypt hash, duplicate email 409, missing fields 400
+    - Frontend RegisterPage.tsx: RHF + Zod resolver, field-level errors, setError('email') for 409
+    - Browser verified: form filled → click → redirected to /w/new → DB has bcrypt hash $2a$10$ len=60
+    - Commit: (pending)
+    - Extracted src/app.ts from src/index.ts (Hono app.request() testability pattern)
+    - Added Vitest v3, vitest.config.ts, src/__tests__/health.test.ts
+    - TDD: RED (missing app.ts) → GREEN (1 test passing)
+    - Curl verified: HTTP 200, body { status: 'ok', service: 'colloquium-chat-api' }
+    - Commit: f2a245e
+
+================================================================================
 NEXT SESSION
 ================================================================================
 

@@ -25,7 +25,7 @@
       "Step 9: Verify no React Hook Form field-level error messages are shown beneath any input",
       "Step 10: Verify the user exists in the database with a hashed (not plain) password"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
