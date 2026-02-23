@@ -106,7 +106,7 @@
       "Step 2: Verify the browser redirects to /login",
       "Step 3: Verify the login page is shown"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

@@ -151,10 +151,22 @@ SESSION 5 — 2026-02-23
     - Browser verified: login → logout → Max-Age=0 cookies → old refresh token → 401
     - Commit: feat(colloquium-chat): implement logout with cookie clearing and token revocation — test #8 passing
 
+[x] Test #9: Unauthenticated users are redirected to /login from protected routes → PASSING
+    - Created apps/colloquium-chat/src/components/RequireAuth.tsx
+    - Calls GET /api/auth/me on mount (using VITE_API_BASE_URL ?? "http://localhost:5001")
+    - On 401/error: navigate("/login", { replace: true }); on 200: renders children
+    - Renders null while auth check is in flight (no flash of protected content)
+    - Updated App.tsx: /w/new and /w/* routes wrapped in <RequireAuth>
+    - 2 new tests in src/components/RequireAuth.test.tsx (unauthenticated → redirect, authenticated → content)
+    - Full frontend suite: 5/5 tests passing — zero regressions
+    - Bug found+fixed: initial impl used relative URL /api/auth/me → Vite served SPA fallback (200); fixed to use API_BASE
+    - Browser verified: navigate /w/any-workspace → redirected to /login → "Sign in to Colloquium" shown
+    - Commit: feat(colloquium-chat): implement RequireAuth guard — test #9 passing
+
 ================================================================================
 NEXT SESSION
 ================================================================================
 
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
-Pick first failing test from feature_list.json (index 8)
+Pick first failing test from feature_list.json (index 9)
