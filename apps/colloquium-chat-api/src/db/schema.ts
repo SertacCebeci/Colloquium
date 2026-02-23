@@ -71,6 +71,21 @@ export const workspaceMembers = sqliteTable(
   (t) => [uniqueIndex("workspace_members_unique").on(t.workspaceId, t.userId)]
 );
 
+export const workspaceInvites = sqliteTable("workspace_invites", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workspaceId: integer("workspace_id")
+    .notNull()
+    .references(() => workspaces.id),
+  token: text("token").notNull(),
+  createdBy: integer("created_by")
+    .notNull()
+    .references(() => users.id),
+  expiresAt: integer("expires_at").notNull(),
+  createdAt: integer("created_at")
+    .notNull()
+    .$defaultFn(() => Date.now()),
+});
+
 export const channels = sqliteTable(
   "channels",
   {

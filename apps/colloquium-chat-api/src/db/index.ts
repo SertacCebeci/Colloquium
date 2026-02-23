@@ -72,6 +72,19 @@ export function createDb(dbPath: string) {
 
   sqlite
     .prepare(
+      `CREATE TABLE IF NOT EXISTS workspace_invites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+        token TEXT NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )`
+    )
+    .run();
+
+  sqlite
+    .prepare(
       `CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         workspace_id INTEGER NOT NULL REFERENCES workspaces(id),

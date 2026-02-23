@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createDb } from "../db/index.js";
 import { createApp } from "../app.js";
+import { workspaceInvites, workspaces } from "../db/schema.js";
+import { eq } from "drizzle-orm";
 
 // Helper: register + login, return cookie header string
 async function loginUser(
@@ -221,5 +223,75 @@ describe("GET /api/workspaces", () => {
   it("returns 401 when not authenticated", async () => {
     const res = await app.request("/api/workspaces");
     expect(res.status).toBe(401);
+  });
+});
+
+describe("GET /api/workspaces/:slug/invite", () => {
+  let app: ReturnType<typeof createApp>;
+  let db: ReturnType<typeof createDb>;
+  let cookie: string;
+
+  beforeEach(async () => {
+    db = createDb(":memory:");
+    app = createApp(db);
+    cookie = await loginUser(app);
+    // Create a workspace to invite into
+    await app.request("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ name: "Invite Space", icon: "📨" }),
+    });
+  });
+
+  it("returns a token string for a workspace member", async () => {
+    const res = await app.request("/api/workspaces/invite-space/invite", {
+      headers: { cookie },
+    });
+
+    expect(res.status).toBe(200);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
+    expect(typeof body.token).toBe("string");
+    expect(body.token.length).toBeGreaterThan(0);
+  });
+
+  it("stores the invite in the database with a 24h expiry", async () => {
+    const before = Date.now();
+
+    const res = await app.request("/api/workspaces/invite-space/invite", {
+      headers: { cookie },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
+    const { token } = body;
+
+    const workspace = db.select().from(workspaces).where(eq(workspaces.slug, "invite-space")).get();
+
+    const invite = db
+      .select()
+      .from(workspaceInvites)
+      .where(eq(workspaceInvites.token, token))
+      .get();
+
+    expect(invite).toBeDefined();
+    expect(invite!.workspaceId).toBe(workspace!.id);
+    // expiresAt must be ~24h in the future (within a 1-second window)
+    const expectedExpiry = before + 24 * 60 * 60 * 1000;
+    expect(invite!.expiresAt).toBeGreaterThanOrEqual(expectedExpiry - 1000);
+    expect(invite!.expiresAt).toBeLessThanOrEqual(expectedExpiry + 1000);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    const res = await app.request("/api/workspaces/invite-space/invite");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 when user is not a workspace member", async () => {
+    const cookieB = await loginUser(app, "outsider@example.com", "Pass123!");
+    const res = await app.request("/api/workspaces/invite-space/invite", {
+      headers: { cookie: cookieB },
+    });
+    expect(res.status).toBe(403);
   });
 });

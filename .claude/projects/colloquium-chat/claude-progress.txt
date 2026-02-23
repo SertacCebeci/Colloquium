@@ -211,9 +211,33 @@ COMPLETED TASKS
     - Commit: feat(colloquium-chat): implement GET /api/workspaces/:slug with member roles — test #13 passing
 
 ================================================================================
+CLAUDE SESSION PROGRESS - Session 8
+================================================================================
+
+Date: 2026-02-23
+Agent: DEVELOP (Session 8 — test #14)
+
+================================================================================
+COMPLETED TASKS
+================================================================================
+
+[x] Test #14: User can generate an invite link for a workspace → PASSING
+    - Added workspaceInvites table: apps/colloquium-chat-api/src/db/schema.ts
+      (workspaceId, token TEXT, createdBy, expiresAt INTEGER, createdAt)
+    - Added inline DDL to createDb() in apps/colloquium-chat-api/src/db/index.ts
+    - Added GET /api/workspaces/:slug/invite to routes/workspaces.ts
+      (requires membership, generates 64-char hex token via crypto.randomBytes(32),
+       stores with expiresAt = Date.now() + 24h, returns { token })
+    - 4 new tests in workspaces.test.ts: token returned, DB expiry ±1s, 401, 403
+    - Full suite: 36/36 tests passing across 7 test files — zero regressions
+    - Browser verified: all 4 test steps confirmed against live API + live SQLite DB
+      (expiry diff: 0ms from 24h mark ✅)
+    - Commit: feat(colloquium-chat): implement GET /api/workspaces/:slug/invite — test #14 passing
+
+================================================================================
 NEXT SESSION
 ================================================================================
 
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
-Pick test #14 from feature_list.json (index 13)
+Pick test #15 from feature_list.json (index 14)

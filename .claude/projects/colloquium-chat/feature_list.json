@@ -161,7 +161,7 @@
       "Step 3: Verify response contains a token string",
       "Step 4: Verify the invite link is valid and stored in the database with an expiry 24h in the future"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
