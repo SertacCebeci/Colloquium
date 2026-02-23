@@ -5,6 +5,7 @@ import { WorkspaceCreatePage } from "./pages/WorkspaceCreatePage";
 import { RequireAuth } from "./components/RequireAuth";
 import { RequireGuest } from "./components/RequireGuest";
 import { WorkspaceLayout } from "./components/WorkspaceLayout";
+import { WorkspacePage } from "./pages/WorkspacePage";
 
 function App() {
   return (
@@ -26,7 +27,7 @@ function App() {
             <WorkspaceLayout>
               <Routes>
                 <Route path="new" element={<WorkspaceCreatePage />} />
-                <Route path=":slug" element={<div>Workspace — coming soon</div>} />
+                <Route path=":slug/*" element={<WorkspacePage />} />
               </Routes>
             </WorkspaceLayout>
           </RequireAuth>

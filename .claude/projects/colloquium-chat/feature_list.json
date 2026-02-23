@@ -194,7 +194,7 @@
       "Step 2: Verify the workspace rail on the left shows 3 workspace icons",
       "Step 3: Click a different workspace icon and verify the URL and channel sidebar update"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
