@@ -96,7 +96,7 @@
       "Step 3: Verify response clears Set-Cookie for access_token and refresh_token",
       "Step 4: Try using the old refresh token to refresh \u2014 verify 401"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

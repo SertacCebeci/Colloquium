@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { eq } from "drizzle-orm";
@@ -208,6 +208,38 @@ export function authRoutes(db: AppDb) {
         displayName: user.displayName,
       },
     });
+  });
+
+  router.post("/logout", async (c) => {
+    const refreshToken = getCookie(c, "refresh_token");
+
+    // Revoke the refresh token in the DB if present
+    if (refreshToken) {
+      try {
+        const payload = jwt.verify(refreshToken, JWT_SECRET) as { sub?: string | number };
+        const userId = Number(payload.sub);
+        const stored = db
+          .select()
+          .from(refreshTokens)
+          .where(eq(refreshTokens.userId, userId))
+          .all();
+
+        for (const row of stored) {
+          if (await bcrypt.compare(refreshToken, row.tokenHash)) {
+            db.delete(refreshTokens).where(eq(refreshTokens.id, row.id)).run();
+            break;
+          }
+        }
+      } catch {
+        // Invalid token — still clear cookies below
+      }
+    }
+
+    const cookieBase = { path: "/", sameSite: "Lax" as const };
+    deleteCookie(c, "access_token", cookieBase);
+    deleteCookie(c, "refresh_token", cookieBase);
+
+    return c.json({ success: true });
   });
 
   return router;

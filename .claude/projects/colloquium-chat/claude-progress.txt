@@ -141,10 +141,20 @@ SESSION 5 — 2026-02-23
     - Browser verified: login → remove access_token → GET /api/auth/me → 200 + new access_token cookie set
     - Commit: feat(colloquium-chat): implement transparent token refresh — test #7 passing
 
+[x] Test #8: Logout clears cookies and invalidates refresh token → PASSING
+    - Added POST /api/auth/logout to apps/colloquium-chat-api/src/routes/auth.ts
+    - Reads refresh_token cookie, jwt.verify() to get userId, bcrypt.compare loop to find+delete matching DB row
+    - deleteCookie(c, "access_token") + deleteCookie(c, "refresh_token") → Max-Age=0 in Set-Cookie
+    - Returns 200 regardless of whether cookies were present (idempotent logout)
+    - 3 new tests in src/__tests__/auth.logout.test.ts (clear cookies, DB revocation, empty logout)
+    - Full suite: 19/19 tests passing across 6 test files — zero regressions
+    - Browser verified: login → logout → Max-Age=0 cookies → old refresh token → 401
+    - Commit: feat(colloquium-chat): implement logout with cookie clearing and token revocation — test #8 passing
+
 ================================================================================
 NEXT SESSION
 ================================================================================
 
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
-Pick first failing test from feature_list.json (index 7)
+Pick first failing test from feature_list.json (index 8)
