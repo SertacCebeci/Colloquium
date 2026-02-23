@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { setCookie } from "hono/cookie";
+import { getCookie, setCookie } from "hono/cookie";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { eq } from "drizzle-orm";
@@ -104,6 +104,35 @@ export function authRoutes(db: AppDb) {
       ...cookieBase,
       maxAge: REFRESH_TOKEN_TTL_S,
     });
+
+    return c.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        displayName: user.displayName,
+      },
+    });
+  });
+
+  router.get("/me", async (c) => {
+    const token = getCookie(c, "access_token");
+    if (!token) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    let payload: { sub?: string | number };
+    try {
+      payload = jwt.verify(token, JWT_SECRET) as { sub?: string | number };
+    } catch {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const userId = Number(payload.sub);
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
 
     return c.json({
       user: {

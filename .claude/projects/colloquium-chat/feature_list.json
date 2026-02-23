@@ -73,7 +73,7 @@
       "Step 2: Send GET to /api/auth/me with valid access_token cookie",
       "Step 3: Verify 200 response with user id, email, username, display_name fields"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
