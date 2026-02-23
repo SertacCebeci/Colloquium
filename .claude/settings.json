@@ -64,7 +64,18 @@
       "mcp__plugin_greptile_greptile__list_merge_requests",
       "mcp__plugin_greptile_greptile__search_custom_context",
       "mcp__plugin_context7_context7__resolve-library-id",
-      "mcp__plugin_context7_context7__query-docs"
+      "mcp__plugin_context7_context7__query-docs",
+      "Bash(curl:*)",
+      "mcp__puppeteer__puppeteer_navigate",
+      "mcp__puppeteer__puppeteer_evaluate",
+      "mcp__puppeteer__puppeteer_click",
+      "mcp__puppeteer__puppeteer_screenshot",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_fill_form",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot"
     ],
     "additionalDirectories": [
       "./vault",
