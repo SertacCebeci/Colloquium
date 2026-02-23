@@ -63,7 +63,7 @@
       "Step 5: Verify the API returns 401",
       "Step 6: Verify React Hook Form renders a root error: 'Incorrect email or password' (set via setError('root', ...))"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

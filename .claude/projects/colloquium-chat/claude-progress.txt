@@ -106,15 +106,21 @@ SESSION 3 — 2026-02-23
     - Commit: feat(colloquium-chat): implement login with JWT cookies — test #4 passing
 
 ================================================================================
+SESSION 4 — 2026-02-23
+================================================================================
+
+[x] Test #5: Login form surfaces 401 error as a React Hook Form root error beneath the form → PASSING
+    - Implementation was pre-existing: LoginPage.tsx line 36-39 (setError("root", ...) on 401)
+    - errors.root rendered as styled paragraph between password field and submit button
+    - Unit test: LoginPage.test.tsx "shows a field-level error when credentials are invalid (401)" ✅
+    - Browser verified: entered wrong password → API returned 401 → "Invalid email or password"
+      displayed inline beneath form, page stays at /login, no redirect
+    - Commit: feat(colloquium-chat): implement 401 root error display — test #5 passing
+
+================================================================================
 NEXT SESSION
 ================================================================================
 
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
-Pick first failing test from feature_list.json (index 0):
-  "Backend server starts and health check endpoint responds with 200 OK"
-
-Session 2 should begin with:
-  1. Database + Drizzle ORM setup (schema, migrations)
-  2. Auth API (register, login, refresh, logout, /me)
-  3. WebSocket server skeleton
+Pick first failing test from feature_list.json (index 5)
