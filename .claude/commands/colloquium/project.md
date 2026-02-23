@@ -1,10 +1,9 @@
-# Colloquium Feature Dispatch
+# Colloquium Project Dispatch
 
-Orchestrate the full Colloquium development workflow from a single command.
-Invoke as: /colloquium:feature "description of what to build"
-Or: /colloquium:feature (to resume an in-progress workflow)
+Orchestrate the full Colloquium development workflow to build a complete project from a single command.
+Invoke as: /colloquium:project "description of what to build"
+Or: /colloquium:project (to resume an in-progress workflow)
 
-**Canonical reference:** `.claude/context/WORKFLOW-DISTILLATION.md`
 **Version:** v2 — 4-phase simple workflow (Discover → Plan → Implement → Test)
 
 ---
@@ -601,7 +600,7 @@ Ask: "Task [N] complete. Continue to Task [N+1] or stop here?"
 ════════════════════════════════════════════════════════════════
 Progress: [N] of [total] tasks complete
 State saved to: .claude/dispatch-state.json
-Resume by running: /colloquium:feature
+Resume by running: /colloquium:project
 ════════════════════════════════════════════════════════════════
 ```
 
@@ -706,7 +705,7 @@ All local quality gates: PASS
 E2E tests: PASS
 
 State file preserved at .claude/dispatch-state.json
-Human handles merge. To start a new feature: /colloquium:feature "description"
+Human handles merge. To build a new project: /colloquium:project "description"
 ════════════════════════════════════════════════════════════════
 ```
 
