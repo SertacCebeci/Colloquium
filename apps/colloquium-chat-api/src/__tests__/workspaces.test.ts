@@ -86,6 +86,41 @@ describe("POST /api/workspaces", () => {
   });
 });
 
+describe("Workspace slug generation", () => {
+  let app: ReturnType<typeof createApp>;
+  let cookie: string;
+
+  beforeEach(async () => {
+    const db = createDb(":memory:");
+    app = createApp(db);
+    cookie = await loginUser(app);
+  });
+
+  it("converts 'My Cool Team' to slug 'my-cool-team'", async () => {
+    const res = await app.request("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ name: "My Cool Team", icon: "🎯" }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.workspace.slug).toBe("my-cool-team");
+  });
+
+  it("strips special characters and normalises spaces", async () => {
+    const res = await app.request("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ name: "  Dev & Ops!  " }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.workspace.slug).toBe("dev-ops");
+  });
+});
+
 describe("GET /api/workspaces", () => {
   let app: ReturnType<typeof createApp>;
   let cookie: string;
