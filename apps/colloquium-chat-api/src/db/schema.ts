@@ -33,3 +33,61 @@ export const refreshTokens = sqliteTable("refresh_tokens", {
     .notNull()
     .$defaultFn(() => Date.now()),
 });
+
+export const workspaces = sqliteTable(
+  "workspaces",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    icon: text("icon"),
+    ownerId: integer("owner_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()),
+  },
+  (t) => [uniqueIndex("workspaces_slug_unique").on(t.slug)]
+);
+
+export const workspaceMembers = sqliteTable(
+  "workspace_members",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workspaceId: integer("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    role: text("role", { enum: ["owner", "admin", "member"] })
+      .notNull()
+      .default("member"),
+    joinedAt: integer("joined_at")
+      .notNull()
+      .$defaultFn(() => Date.now()),
+  },
+  (t) => [uniqueIndex("workspace_members_unique").on(t.workspaceId, t.userId)]
+);
+
+export const channels = sqliteTable(
+  "channels",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workspaceId: integer("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    isPrivate: integer("is_private", { mode: "boolean" }).notNull().default(false),
+    isArchived: integer("is_archived", { mode: "boolean" }).notNull().default(false),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at")
+      .notNull()
+      .$defaultFn(() => Date.now()),
+  },
+  (t) => [uniqueIndex("channels_workspace_name_unique").on(t.workspaceId, t.name)]
+);

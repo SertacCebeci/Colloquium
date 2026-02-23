@@ -43,6 +43,49 @@ export function createDb(dbPath: string) {
     )
     .run();
 
+  sqlite
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS workspaces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        icon TEXT,
+        owner_id INTEGER NOT NULL REFERENCES users(id),
+        created_at INTEGER NOT NULL,
+        CONSTRAINT workspaces_slug_unique UNIQUE(slug)
+      )`
+    )
+    .run();
+
+  sqlite
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS workspace_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        role TEXT NOT NULL DEFAULT 'member',
+        joined_at INTEGER NOT NULL,
+        CONSTRAINT workspace_members_unique UNIQUE(workspace_id, user_id)
+      )`
+    )
+    .run();
+
+  sqlite
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS channels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+        name TEXT NOT NULL,
+        description TEXT,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        is_archived INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at INTEGER NOT NULL,
+        CONSTRAINT channels_workspace_name_unique UNIQUE(workspace_id, name)
+      )`
+    )
+    .run();
+
   return db;
 }
 

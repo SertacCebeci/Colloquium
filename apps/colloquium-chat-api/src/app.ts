@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import type { AppDb } from "./db/index.js";
 import { authRoutes } from "./routes/auth.js";
+import { workspaceRoutes } from "./routes/workspaces.js";
 
 export function createApp(db: AppDb) {
   const app = new Hono();
@@ -22,6 +23,7 @@ export function createApp(db: AppDb) {
   });
 
   app.route("/api/auth", authRoutes(db));
+  app.route("/api/workspaces", workspaceRoutes(db));
 
   return app;
 }

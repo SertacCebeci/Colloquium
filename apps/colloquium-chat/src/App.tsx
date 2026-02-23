@@ -1,8 +1,10 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { RegisterPage } from "./pages/RegisterPage";
 import { LoginPage } from "./pages/LoginPage";
+import { WorkspaceCreatePage } from "./pages/WorkspaceCreatePage";
 import { RequireAuth } from "./components/RequireAuth";
 import { RequireGuest } from "./components/RequireGuest";
+import { WorkspaceLayout } from "./components/WorkspaceLayout";
 
 function App() {
   return (
@@ -18,18 +20,15 @@ function App() {
       />
       <Route path="/register" element={<RegisterPage />} />
       <Route
-        path="/w/new"
-        element={
-          <RequireAuth>
-            <div>Create workspace — coming soon</div>
-          </RequireAuth>
-        }
-      />
-      <Route
         path="/w/*"
         element={
           <RequireAuth>
-            <div>Workspace — coming soon</div>
+            <WorkspaceLayout>
+              <Routes>
+                <Route path="new" element={<WorkspaceCreatePage />} />
+                <Route path=":slug" element={<div>Workspace — coming soon</div>} />
+              </Routes>
+            </WorkspaceLayout>
           </RequireAuth>
         }
       />
