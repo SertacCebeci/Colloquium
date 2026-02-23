@@ -83,6 +83,19 @@ SESSION 2 — 2026-02-23
     - Commit: f2a245e
 
 ================================================================================
+SESSION 3 — 2026-02-23
+================================================================================
+
+[x] Test #3: Register form displays server error for duplicate email via React Hook Form setError → PASSING
+    - Added Vitest + React Testing Library + jsdom testing infrastructure to frontend
+    - vitest.config.ts (globals: true, jsdom env, @testing-library/jest-dom setup)
+    - src/pages/RegisterPage.test.tsx: mocks fetch → 409, verifies error appears beneath email field
+    - Implementation was pre-existing: RegisterPage.tsx line 57-60 (setError("email", 409 handler))
+    - API verified: POST /api/auth/register with duplicate email → 409 { error: "Email already in use" }
+    - Browser verified: "An account with that email already exists" rendered beneath email input
+    - Commit: feat(colloquium-chat): implement duplicate email error — test #3 passing
+
+================================================================================
 NEXT SESSION
 ================================================================================
 

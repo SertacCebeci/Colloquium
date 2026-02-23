@@ -36,7 +36,7 @@
       "Step 3: Verify the API returns 409 status code",
       "Step 4: Verify React Hook Form renders the server-returned 409 error message beneath the email field"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -1585,9 +1585,9 @@
     "description": "Register form (React Hook Form watch) drives live password strength indicator",
     "steps": [
       "Step 1: Navigate to /register",
-      "Step 2: Type a weak password (e.g., '123') — verify React Hook Form watch() or onChange triggers the strength indicator to update without submitting",
+      "Step 2: Type a weak password (e.g., '123') \u2014 verify React Hook Form watch() or onChange triggers the strength indicator to update without submitting",
       "Step 3: Verify a strength indicator shows 'Weak' in red",
-      "Step 4: Type a strong password — verify the indicator updates reactively via React Hook Form field watching",
+      "Step 4: Type a strong password \u2014 verify the indicator updates reactively via React Hook Form field watching",
       "Step 5: Verify the indicator shows 'Strong' in green"
     ],
     "passes": false
