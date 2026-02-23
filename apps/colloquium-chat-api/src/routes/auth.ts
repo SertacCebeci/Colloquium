@@ -116,23 +116,89 @@ export function authRoutes(db: AppDb) {
   });
 
   router.get("/me", async (c) => {
-    const token = getCookie(c, "access_token");
-    if (!token) {
+    const accessToken = getCookie(c, "access_token");
+
+    // Fast path: valid access token
+    if (accessToken) {
+      try {
+        const payload = jwt.verify(accessToken, JWT_SECRET) as { sub?: string | number };
+        const userId = Number(payload.sub);
+        const user = db.select().from(users).where(eq(users.id, userId)).get();
+        if (user) {
+          return c.json({
+            user: {
+              id: user.id,
+              email: user.email,
+              username: user.username,
+              displayName: user.displayName,
+            },
+          });
+        }
+      } catch {
+        // fall through to refresh token path
+      }
+    }
+
+    // Fallback: try refresh token transparently
+    const refreshToken = getCookie(c, "refresh_token");
+    if (!refreshToken) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    let payload: { sub?: string | number };
+    let refreshPayload: { sub?: string | number; type?: string };
     try {
-      payload = jwt.verify(token, JWT_SECRET) as { sub?: string | number };
+      refreshPayload = jwt.verify(refreshToken, JWT_SECRET) as {
+        sub?: string | number;
+        type?: string;
+      };
     } catch {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    const userId = Number(payload.sub);
+    if (refreshPayload.type !== "refresh") {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const userId = Number(refreshPayload.sub);
+    const now = Date.now();
+
+    // Verify the refresh token exists in the DB (not revoked) and is not expired
+    const stored = db
+      .select()
+      .from(refreshTokens)
+      .where(eq(refreshTokens.userId, userId))
+      .all()
+      .filter((r) => r.expiresAt > now);
+
+    let tokenValid = false;
+    for (const row of stored) {
+      if (await bcrypt.compare(refreshToken, row.tokenHash)) {
+        tokenValid = true;
+        break;
+      }
+    }
+
+    if (!tokenValid) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
     const user = db.select().from(users).where(eq(users.id, userId)).get();
     if (!user) {
       return c.json({ error: "Unauthorized" }, 401);
     }
+
+    // Issue new access token
+    const newAccessToken = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, {
+      expiresIn: ACCESS_TOKEN_TTL_S,
+    });
+
+    setCookie(c, "access_token", newAccessToken, {
+      httpOnly: true,
+      sameSite: "Lax" as const,
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: ACCESS_TOKEN_TTL_S,
+    });
 
     return c.json({
       user: {

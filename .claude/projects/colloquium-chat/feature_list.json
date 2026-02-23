@@ -85,7 +85,7 @@
       "Step 4: Verify the server uses the refresh token to issue a new access_token",
       "Step 5: Verify the response returns 200 (not 401)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

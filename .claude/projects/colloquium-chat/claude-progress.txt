@@ -132,10 +132,19 @@ SESSION 5 — 2026-02-23
     - Browser verified: login → GET /api/auth/me → 200 with correct user fields
     - Commit: feat(colloquium-chat): implement GET /api/auth/me — test #6 passing
 
+[x] Test #7: Access token refresh works transparently → PASSING
+    - Extended GET /api/auth/me to fall through to refresh_token when access_token is absent/invalid
+    - Verifies refresh token via jwt.verify() + type === "refresh" check + bcrypt DB lookup
+    - On valid refresh: issues new access_token cookie (httpOnly, Lax) and returns 200 + user data
+    - 3 new tests in src/__tests__/auth.refresh.test.ts (valid refresh → 200, no cookies → 401, bad token → 401)
+    - Full suite: 16/16 tests passing across 5 test files — zero regressions
+    - Browser verified: login → remove access_token → GET /api/auth/me → 200 + new access_token cookie set
+    - Commit: feat(colloquium-chat): implement transparent token refresh — test #7 passing
+
 ================================================================================
 NEXT SESSION
 ================================================================================
 
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
-Pick first failing test from feature_list.json (index 6)
+Pick first failing test from feature_list.json (index 7)
