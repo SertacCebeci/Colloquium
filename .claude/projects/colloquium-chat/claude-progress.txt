@@ -95,6 +95,16 @@ SESSION 3 — 2026-02-23
     - Browser verified: "An account with that email already exists" rendered beneath email input
     - Commit: feat(colloquium-chat): implement duplicate email error — test #3 passing
 
+[x] Test #4: User can log in with valid credentials and receives JWT cookies → PASSING
+    - POST /api/auth/login route in apps/colloquium-chat-api/src/routes/auth.ts
+    - bcrypt password compare, JWT sign (access_token 15min, refresh_token 7d)
+    - setCookie(c, "access_token" / "refresh_token", ..., { httpOnly, sameSite: Lax })
+    - Stores refresh_token hash in refresh_tokens table
+    - LoginPage.tsx: RHF + Zod, credentials: include, navigate("/w/new") on success
+    - 5 API tests + 2 frontend tests all passing (13 total across 5 test files)
+    - Browser verified: redirect to /w/new, curl confirms HttpOnly cookies in response headers
+    - Commit: feat(colloquium-chat): implement login with JWT cookies — test #4 passing
+
 ================================================================================
 NEXT SESSION
 ================================================================================
