@@ -20,3 +20,65 @@ Invoke as:
 6. **AI never touches git beyond reading status.** No branch creation, no push, no PR — the human controls all git operations. The ONE exception: the initial scaffold commit in Phase B3 (explicitly described below).
 
 ---
+
+## Phase 0: Entrypoint (always runs first)
+
+---
+
+### Step 0.1 — Scan for existing projects
+
+```bash
+ls .claude/projects/ 2>/dev/null
+```
+
+Collect all subdirectories that contain a `project-state.json`. Build a list: `known_projects`.
+
+---
+
+### Step 0.2 — Migration check
+
+If `.claude/dispatch-state.json` exists:
+
+```
+⚠️  Legacy dispatch-state.json detected.
+```
+
+- If it contains `"version": 2` and a `"feature"` field: offer to migrate it.
+  - Ask: "Migrate dispatch-state.json to .claude/projects/<feature>/project-state.json and delete it?"
+  - If yes: create `.claude/projects/<feature>/project-state.json` with the legacy data mapped to v1 schema, then delete `.claude/dispatch-state.json`.
+  - If no: leave it; it will not affect this workflow.
+- If it is v1 or corrupt: display "Discarding malformed dispatch-state.json" and delete it.
+
+---
+
+### Step 0.3 — Ask: new or continue?
+
+Display:
+
+```
+════════════════════════════════════════════════════════════════
+🚀 COLLOQUIUM PROJECT
+════════════════════════════════════════════════════════════════
+```
+
+**If `known_projects` is empty:** Skip directly to Flow 1 (Bootstrap). No need to ask.
+
+**If `known_projects` has entries:** Display list with progress summaries:
+
+```
+Known projects:
+  1. claude-ai-clone     — 34/200 tests passing  (last session: 2026-02-20)
+  2. my-dashboard        — 12/200 tests passing  (last session: 2026-02-19)
+
+  n. Start a new project
+
+Choose:
+```
+
+Wait for user input.
+
+- If user picks an existing project number → **Flow 2: Develop** with that project.
+- If user picks "new" → **Flow 1: Bootstrap**.
+- If `/colloquium:project <slug>` was invoked with a slug that matches a known project → skip this question and go directly to Flow 2.
+
+---
