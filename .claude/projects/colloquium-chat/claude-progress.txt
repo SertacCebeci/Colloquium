@@ -170,3 +170,50 @@ NEXT SESSION
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
 Pick first failing test from feature_list.json (index 9)
+
+================================================================================
+CLAUDE SESSION PROGRESS - Session 6
+================================================================================
+
+Date: 2026-02-23
+Agent: DEVELOP (Session 6 — test #10)
+
+================================================================================
+COMPLETED TASKS
+================================================================================
+
+[x] Test #10: Authenticated user is redirected away from /login back to their workspace → PASSING
+    - Created RequireGuest.tsx (inverse of RequireAuth — redirects to /w/new if authenticated)
+    - Wrapped /login route in App.tsx with <RequireGuest>
+    - Browser verified: navigating to /login while authenticated redirects to /w/new
+
+================================================================================
+CLAUDE SESSION PROGRESS - Session 7
+================================================================================
+
+Date: 2026-02-23
+Agent: DEVELOP (Session 7 — test #13)
+
+================================================================================
+COMPLETED TASKS
+================================================================================
+
+[x] Test #11: User can create a new workspace with name and emoji icon → PASSING (regression verified ✅)
+[x] Test #12: Workspace slug is auto-generated (kebab-case) from the workspace name → PASSING (regression verified ✅)
+
+[x] Test #13: Workspace creator is assigned the 'owner' role → PASSING
+    - Added GET /api/workspaces/:slug to apps/colloquium-chat-api/src/routes/workspaces.ts
+    - Imports users table; joins workspace_members → users to return role + username + displayName + avatar
+    - Enforces membership check (403 if requester not a member), 404 if slug unknown, 401 if unauthenticated
+    - 4 new tests in src/__tests__/workspaces.test.ts (owner role, 404, 403, 401) — all GREEN
+    - Fixed pre-existing TS error: `res.json() as any` cast in test file (strict mode + unknown return type)
+    - Browser verified: GET /api/workspaces/regression-workspace → members[0].role === "owner" ✅
+    - Commit: feat(colloquium-chat): implement GET /api/workspaces/:slug with member roles — test #13 passing
+
+================================================================================
+NEXT SESSION
+================================================================================
+
+Run /colloquium:project and choose "continue" → colloquium-chat
+Start servers with: pnpm turbo dev
+Pick test #14 from feature_list.json (index 13)

@@ -42,7 +42,8 @@ describe("POST /api/workspaces", () => {
     });
 
     expect(res.status).toBe(201);
-    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
     expect(body.workspace.name).toBe("Test Workspace");
     expect(body.workspace.slug).toBe("test-workspace");
     expect(body.workspace.icon).toBe("🚀");
@@ -60,7 +61,8 @@ describe("POST /api/workspaces", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
     const general = body.channels.find((ch: { name: string }) => ch.name === "general");
     expect(general).toBeDefined();
   });
@@ -104,7 +106,8 @@ describe("Workspace slug generation", () => {
     });
 
     expect(res.status).toBe(201);
-    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
     expect(body.workspace.slug).toBe("my-cool-team");
   });
 
@@ -116,8 +119,67 @@ describe("Workspace slug generation", () => {
     });
 
     expect(res.status).toBe(201);
-    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
     expect(body.workspace.slug).toBe("dev-ops");
+  });
+});
+
+describe("GET /api/workspaces/:slug", () => {
+  let app: ReturnType<typeof createApp>;
+  let cookie: string;
+
+  beforeEach(async () => {
+    const db = createDb(":memory:");
+    app = createApp(db);
+    cookie = await loginUser(app);
+  });
+
+  it("returns workspace with members list including creator as owner", async () => {
+    await app.request("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ name: "Owner Test", icon: "🏆" }),
+    });
+
+    const res = await app.request("/api/workspaces/owner-test", { headers: { cookie } });
+
+    expect(res.status).toBe(200);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
+    expect(body.workspace).toBeDefined();
+    expect(body.workspace.slug).toBe("owner-test");
+    expect(body.members).toBeDefined();
+    expect(body.members).toHaveLength(1);
+    expect(body.members[0].role).toBe("owner");
+    expect(body.members[0].username).toBe("ws");
+  });
+
+  it("returns 404 for unknown slug", async () => {
+    const res = await app.request("/api/workspaces/does-not-exist", { headers: { cookie } });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when user is not a member", async () => {
+    // Create workspace as User A
+    await app.request("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ name: "Private Space", icon: "🔒" }),
+    });
+
+    // Log in as User B
+    const cookieB = await loginUser(app, "other@example.com", "Pass123!");
+
+    const res = await app.request("/api/workspaces/private-space", {
+      headers: { cookie: cookieB },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    const res = await app.request("/api/workspaces/some-slug");
+    expect(res.status).toBe(401);
   });
 });
 
@@ -141,7 +203,8 @@ describe("GET /api/workspaces", () => {
     const res = await app.request("/api/workspaces", { headers: { cookie } });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
     expect(body.workspaces).toHaveLength(1);
     expect(body.workspaces[0].name).toBe("My Space");
   });
@@ -150,7 +213,8 @@ describe("GET /api/workspaces", () => {
     const res = await app.request("/api/workspaces", { headers: { cookie } });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
     expect(body.workspaces).toHaveLength(0);
   });
 

@@ -116,7 +116,7 @@
       "Step 2: Navigate to /login while already authenticated",
       "Step 3: Verify the browser redirects to /w/:slug automatically"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -130,7 +130,7 @@
       "Step 6: Verify the workspace appears in the workspace rail on the left",
       "Step 7: Verify a #general channel was auto-created"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -140,7 +140,7 @@
       "Step 2: Verify the URL becomes /w/my-cool-team",
       "Step 3: Verify POST /api/workspaces returns slug 'my-cool-team'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -150,7 +150,7 @@
       "Step 2: GET /api/workspaces/:slug",
       "Step 3: Verify User A appears in the members list with role 'owner'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

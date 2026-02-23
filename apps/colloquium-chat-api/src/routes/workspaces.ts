@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, and } from "drizzle-orm";
 import type { AppDb } from "../db/index.js";
-import { workspaces, workspaceMembers, channels } from "../db/schema.js";
+import { workspaces, workspaceMembers, channels, users } from "../db/schema.js";
 import { requireAuth, type AuthEnv } from "../middleware/requireAuth.js";
 
 function slugify(name: string): string {
@@ -69,6 +69,45 @@ export function workspaceRoutes(db: AppDb) {
       .all();
 
     return c.json({ workspaces: rows });
+  });
+
+  router.get("/:slug", async (c) => {
+    const userId = c.get("userId");
+    const slug = c.req.param("slug");
+
+    const workspace = db.select().from(workspaces).where(eq(workspaces.slug, slug)).get();
+
+    if (!workspace) {
+      return c.json({ error: "Workspace not found" }, 404);
+    }
+
+    const membership = db
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspace.id), eq(workspaceMembers.userId, userId))
+      )
+      .get();
+
+    if (!membership) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    const members = db
+      .select({
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+        joinedAt: workspaceMembers.joinedAt,
+        username: users.username,
+        displayName: users.displayName,
+        avatar: users.avatar,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(eq(workspaceMembers.workspaceId, workspace.id))
+      .all();
+
+    return c.json({ workspace, members });
   });
 
   router.get("/:slug/channels", async (c) => {
