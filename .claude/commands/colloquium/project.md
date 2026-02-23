@@ -181,3 +181,194 @@ Ask: "Does this look correct? Any corrections before I generate the spec?"
 If corrections: update the relevant fields and re-display the banner. Loop until confirmed.
 
 ---
+
+### Phase B2: Spec Generation — HARD GATE
+
+> ⚠️ HARD GATE: Do NOT proceed to Phase B3 until all three artifacts are written to disk.
+
+Generate all three artifacts atomically from the Q&A answers. For any field not explicitly answered, use sensible defaults that match the stated tech stack and feature set.
+
+---
+
+#### Artifact 1: `app_spec.txt`
+
+Write to: `.claude/projects/<slug>/app_spec.txt`
+
+The file MUST follow this XML structure exactly (all sections required):
+
+```xml
+<project_specification>
+  <project_name>[name from Q&A]</project_name>
+
+  <overview>
+    [2–4 sentence description of the app, its purpose, and target users]
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>[from Q&A]</framework>
+      <styling>[from Q&A]</styling>
+      <state_management>[from Q&A]</state_management>
+      <routing>[inferred from framework choice]</routing>
+      <port>Only launch on port [from constraints, or 5173 default]</port>
+    </frontend>
+    <backend>
+      <runtime>[from Q&A, or NONE if frontend-only]</runtime>
+      <database>[from Q&A, or NONE]</database>
+      <port>[5001 default if backend exists]</port>
+    </backend>
+    <auth>[from Q&A]</auth>
+    <realtime>[from Q&A]</realtime>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      [List: what must exist before running the app — API keys, env vars, pre-installed deps]
+    </environment_setup>
+  </prerequisites>
+
+  <core_features>
+    [One XML element per feature area. For each MVP feature, include detailed sub-bullets.
+     For nice-to-have features, include a shorter summary. Example:]
+    <[feature_slug]>
+      - [specific capability 1]
+      - [specific capability 2]
+      ...
+    </[feature_slug]>
+  </core_features>
+
+  <database_schema>
+    <tables>
+      [One element per table. List all columns with types and purpose.]
+    </tables>
+  </database_schema>
+
+  <api_endpoints_summary>
+    [Group endpoints by domain. List method + path + one-line description for each.]
+  </api_endpoints_summary>
+
+  <ui_layout>
+    <main_structure>[describe the top-level layout]</main_structure>
+    [One element per major UI panel or section]
+  </ui_layout>
+
+  <design_system>
+    <color_palette>[primary, background, surface, text, borders]</color_palette>
+    <typography>[font stack, heading weights, body size]</typography>
+    <components>
+      [Key reusable components with their visual spec]
+    </components>
+    <animations>[transition timing, key animations]</animations>
+  </design_system>
+
+  <key_interactions>
+    [2–4 named interaction flows, each as a numbered step sequence]
+  </key_interactions>
+
+  <implementation_steps>
+    [8–10 numbered steps in priority order. Each step has a title and task list.]
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>[list]</functionality>
+    <user_experience>[list]</user_experience>
+    <technical_quality>[list]</technical_quality>
+    <design_polish>[list]</design_polish>
+  </success_criteria>
+</project_specification>
+```
+
+---
+
+#### Artifact 2: `feature_list.json`
+
+Write to: `.claude/projects/<slug>/feature_list.json`
+
+Rules:
+
+- **200 test cases total** — 100 `"functional"` + 100 `"style"`
+- Ordered by priority: foundational/infrastructure first, UI polish last
+- Every test starts with `"passes": false`
+- At least 25 tests must have 10+ steps
+- Cover every feature in `app_spec.txt` exhaustively — no feature area may be omitted
+- `"steps"` must be concrete enough that a browser-automation agent can execute them literally
+
+Format:
+
+```json
+[
+  {
+    "category": "functional",
+    "description": "Backend server starts and health check endpoint responds with 200 OK",
+    "steps": [
+      "Step 1: Run init.sh or pnpm turbo dev to start the server",
+      "Step 2: Send GET request to /api/health",
+      "Step 3: Verify response status is 200",
+      "Step 4: Verify response contains { status: 'ok' }"
+    ],
+    "passes": false
+  }
+]
+```
+
+**CRITICAL:** Once written, `feature_list.json` is immutable except for the `"passes"` field. Future sessions may ONLY change `false` → `true`. Never remove tests, never edit descriptions or steps.
+
+---
+
+#### Artifact 3: `claude-progress.txt`
+
+Write to: `.claude/projects/<slug>/claude-progress.txt`
+
+Initialize with:
+
+```
+================================================================================
+CLAUDE SESSION PROGRESS - Session 1 (Bootstrap)
+================================================================================
+
+Date: [today's date]
+Agent: BOOTSTRAP (Session 1 — project initialization)
+
+================================================================================
+COMPLETED TASKS
+================================================================================
+
+[x] Ran Q&A phase — gathered requirements across 5 blocks
+[x] Generated app_spec.txt — full XML specification
+[x] Generated feature_list.json — 200 test cases (all passes: false)
+[x] Scaffolded monorepo structure (see below)
+
+================================================================================
+PROJECT STRUCTURE
+================================================================================
+
+[List the created dirs and key files here after Phase B3 completes]
+
+================================================================================
+NEXT SESSION
+================================================================================
+
+Run /colloquium:project and choose "continue" → [slug]
+Start servers with: pnpm turbo dev
+Pick first failing test from feature_list.json (index 0)
+```
+
+---
+
+#### Hard gate check
+
+After writing all three files, display:
+
+```
+════════════════════════════════════════════════════════════════
+✅ Spec Generation Complete
+════════════════════════════════════════════════════════════════
+  app_spec.txt         ✅  (.claude/projects/<slug>/app_spec.txt)
+  feature_list.json    ✅  200 tests  (0 passing)
+  claude-progress.txt  ✅  Session 1 initialized
+════════════════════════════════════════════════════════════════
+```
+
+Verify all three files exist on disk using Bash `ls`. If any file is missing, write it before proceeding.
+
+---
