@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feature": "kintsugi-sonar",
+  "description": "Implement Kintsugi Sonar — a desktop-style app for reviewing Claude Code sessions with multi-threaded development support, Sonar-powered guardrails, and session management UI",
+  "phase": 1,
+  "step": "1.1",
+  "currentTaskIndex": null,
+  "totalTasks": null,
+  "branch": "feat/kintsugi-sonar",
+  "worktreeDir": null,
+  "completedSteps": [],
+  "artifacts": {
+    "designDoc": null,
+    "boundaryMap": null,
+    "planFile": null,
+    "vercelProject": null,
+    "deployUrl": null,
+    "prUrl": null
+  },
+  "lastUpdated": "2026-02-21T00:00:00.000Z"
+}

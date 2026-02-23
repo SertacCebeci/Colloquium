@@ -1,0 +1,11 @@
+{
+  "extends": "@colloquium/tsconfig/react",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}

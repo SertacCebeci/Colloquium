@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Install TS dependencies
+        run: pnpm install
+
+      - name: Install Python dependencies
+        run: uv sync --all-packages
+
+      - name: Lint (TypeScript)
+        run: pnpm turbo lint
+
+      - name: Lint (Python)
+        run: uv run ruff check .
+
+      - name: Test (TypeScript)
+        run: pnpm turbo test
+
+      - name: Test (Python)
+        run: uv run pytest
+
+      - name: Build (TypeScript)
+        run: pnpm turbo build
