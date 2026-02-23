@@ -9,30 +9,33 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4.6.0",
+    "@colloquium/colloquium-chat-types": "workspace:*",
     "@hono/node-server": "^1.13.0",
-    "better-sqlite3": "^11.5.0",
-    "drizzle-orm": "^0.36.0",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
-    "ws": "^8.18.0",
+    "better-sqlite3": "^11.5.0",
     "dotenv": "^16.4.0",
-    "@colloquium/colloquium-chat-types": "workspace:*"
+    "drizzle-orm": "^0.36.0",
+    "hono": "^4.6.0",
+    "jsonwebtoken": "^9.0.2",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@colloquium/config": "workspace:*",
     "@colloquium/tsconfig": "workspace:*",
-    "@types/better-sqlite3": "^7.6.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.0",
     "@types/jsonwebtoken": "^9.0.7",
-    "@types/ws": "^8.5.0",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "drizzle-kit": "^0.27.0",
     "tsup": "^8.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^3.2.4"
   }
 }

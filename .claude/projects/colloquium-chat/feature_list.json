@@ -8,7 +8,7 @@
       "Step 3: Verify response status is 200",
       "Step 4: Verify response body contains { status: 'ok' }"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
