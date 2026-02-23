@@ -184,7 +184,7 @@
       "Step 3: POST to /api/workspaces/join/:token",
       "Step 4: Verify response is 410 with error message 'Invite link expired'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

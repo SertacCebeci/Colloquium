@@ -260,3 +260,18 @@ NEXT SESSION
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
 Pick test #16 from feature_list.json (index 15)
+
+[x] Test #16: Expired invite link returns 410 Gone → PASSING
+    - Existing test already covered 410 status — added error message assertion: body.error === "Invite link expired"
+    - Updated route: "Invite has expired" → "Invite link expired" in routes/workspaces.ts
+    - 43/43 tests passing — zero regressions
+    - Browser verified: steps 1-4 all pass, response body { error: "Invite link expired" } HTTP 410 ✅
+    - Commit: feat(colloquium-chat): assert invite expiry error message — test #16 passing
+
+================================================================================
+NEXT SESSION
+================================================================================
+
+Run /colloquium:project and choose "continue" → colloquium-chat
+Start servers with: pnpm turbo dev
+Pick test #17 from feature_list.json (index 16)

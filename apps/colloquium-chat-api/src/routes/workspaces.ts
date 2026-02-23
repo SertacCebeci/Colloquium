@@ -183,7 +183,7 @@ export function workspaceRoutes(db: AppDb) {
     }
 
     if (invite.expiresAt < Date.now()) {
-      return c.json({ error: "Invite has expired" }, 410);
+      return c.json({ error: "Invite link expired" }, 410);
     }
 
     const existing = db

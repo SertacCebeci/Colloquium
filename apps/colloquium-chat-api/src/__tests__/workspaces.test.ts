@@ -434,5 +434,8 @@ describe("POST /api/workspaces/join/:token", () => {
     });
 
     expect(res.status).toBe(410);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
+    expect(body.error).toBe("Invite link expired");
   });
 });
