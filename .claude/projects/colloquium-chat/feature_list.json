@@ -1,0 +1,2262 @@
+[
+  {
+    "category": "functional",
+    "description": "Backend server starts and health check endpoint responds with 200 OK",
+    "steps": [
+      "Step 1: Start the API server with `pnpm turbo dev --filter=colloquium-chat-api`",
+      "Step 2: Send GET request to http://localhost:5001/api/health",
+      "Step 3: Verify response status is 200",
+      "Step 4: Verify response body contains { status: 'ok' }"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can register with email, username, and password",
+    "steps": [
+      "Step 1: Start both frontend and API servers",
+      "Step 2: Navigate to http://localhost:5173/register",
+      "Step 3: Fill email field with 'testuser@example.com'",
+      "Step 4: Fill username field with 'testuser'",
+      "Step 5: Fill password field with 'SecurePass123!'",
+      "Step 6: Fill confirm-password field with 'SecurePass123!'",
+      "Step 7: Click the 'Create account' button",
+      "Step 8: Verify redirect to /w/new or the workspace creation page",
+      "Step 9: Verify no error messages are shown",
+      "Step 10: Verify the user exists in the database with a hashed (not plain) password"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Registration rejects duplicate email address",
+    "steps": [
+      "Step 1: Register a user with email 'dup@example.com'",
+      "Step 2: Attempt to register another user with the same email 'dup@example.com'",
+      "Step 3: Verify the API returns 409 status code",
+      "Step 4: Verify an error message is displayed on the register form"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can log in with valid credentials and receives JWT cookies",
+    "steps": [
+      "Step 1: Register a user with email 'login@example.com' and password 'Pass123!'",
+      "Step 2: Navigate to /login",
+      "Step 3: Fill email with 'login@example.com' and password with 'Pass123!'",
+      "Step 4: Click 'Sign in'",
+      "Step 5: Verify redirect away from /login",
+      "Step 6: Verify the browser has a Set-Cookie header with 'access_token' (httpOnly)",
+      "Step 7: Verify the browser has a Set-Cookie header with 'refresh_token' (httpOnly)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Login rejects incorrect password with 401 response",
+    "steps": [
+      "Step 1: Register a user with known credentials",
+      "Step 2: Navigate to /login",
+      "Step 3: Enter correct email and incorrect password 'wrongpassword'",
+      "Step 4: Click 'Sign in'",
+      "Step 5: Verify the API returns 401",
+      "Step 6: Verify an error message appears on the login form saying incorrect credentials"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "GET /api/auth/me returns current user when authenticated",
+    "steps": [
+      "Step 1: Log in as a valid user",
+      "Step 2: Send GET to /api/auth/me with valid access_token cookie",
+      "Step 3: Verify 200 response with user id, email, username, display_name fields"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Access token refresh works transparently",
+    "steps": [
+      "Step 1: Log in to get valid refresh_token cookie",
+      "Step 2: Expire (or remove) the access_token cookie",
+      "Step 3: Make an authenticated request to /api/auth/me",
+      "Step 4: Verify the server uses the refresh token to issue a new access_token",
+      "Step 5: Verify the response returns 200 (not 401)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Logout clears cookies and invalidates refresh token",
+    "steps": [
+      "Step 1: Log in as a user",
+      "Step 2: POST to /api/auth/logout",
+      "Step 3: Verify response clears Set-Cookie for access_token and refresh_token",
+      "Step 4: Try using the old refresh token to refresh \u2014 verify 401"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Unauthenticated users are redirected to /login from protected routes",
+    "steps": [
+      "Step 1: Without logging in, navigate to /w/any-workspace",
+      "Step 2: Verify the browser redirects to /login",
+      "Step 3: Verify the login page is shown"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Authenticated user is redirected away from /login back to their workspace",
+    "steps": [
+      "Step 1: Log in as a user who is a member of a workspace",
+      "Step 2: Navigate to /login while already authenticated",
+      "Step 3: Verify the browser redirects to /w/:slug automatically"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can create a new workspace with name and emoji icon",
+    "steps": [
+      "Step 1: Log in and navigate to workspace creation page",
+      "Step 2: Enter workspace name 'Test Workspace'",
+      "Step 3: Select an emoji icon",
+      "Step 4: Click 'Create workspace'",
+      "Step 5: Verify redirect to /w/test-workspace (slugified)",
+      "Step 6: Verify the workspace appears in the workspace rail on the left",
+      "Step 7: Verify a #general channel was auto-created"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Workspace slug is auto-generated (kebab-case) from the workspace name",
+    "steps": [
+      "Step 1: Create a workspace named 'My Cool Team'",
+      "Step 2: Verify the URL becomes /w/my-cool-team",
+      "Step 3: Verify POST /api/workspaces returns slug 'my-cool-team'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Workspace creator is assigned the 'owner' role",
+    "steps": [
+      "Step 1: Log in as User A and create a workspace",
+      "Step 2: GET /api/workspaces/:slug",
+      "Step 3: Verify User A appears in the members list with role 'owner'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can generate an invite link for a workspace",
+    "steps": [
+      "Step 1: Log in as workspace owner",
+      "Step 2: GET /api/workspaces/:slug/invite",
+      "Step 3: Verify response contains a token string",
+      "Step 4: Verify the invite link is valid and stored in the database with an expiry 24h in the future"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Second user can join workspace via invite link",
+    "steps": [
+      "Step 1: Owner generates invite link, gets token",
+      "Step 2: Register User B with a different email",
+      "Step 3: User B POSTs to /api/workspaces/join/:token",
+      "Step 4: Verify User B is added to workspace_members with role 'member'",
+      "Step 5: Verify User B's workspace list includes the joined workspace"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Expired invite link returns 410 Gone",
+    "steps": [
+      "Step 1: Generate an invite link",
+      "Step 2: Manually set its expires_at to a past timestamp in the database",
+      "Step 3: POST to /api/workspaces/join/:token",
+      "Step 4: Verify response is 410 with error message 'Invite link expired'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Workspace switcher shows all workspaces the user belongs to",
+    "steps": [
+      "Step 1: Log in as a user who belongs to 3 workspaces",
+      "Step 2: Verify the workspace rail on the left shows 3 workspace icons",
+      "Step 3: Click a different workspace icon and verify the URL and channel sidebar update"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can create a public channel in a workspace",
+    "steps": [
+      "Step 1: Log in and navigate to a workspace",
+      "Step 2: Click the '+' button next to Channels in the sidebar",
+      "Step 3: Enter channel name 'general-discussion', leave public selected",
+      "Step 4: Click 'Create channel'",
+      "Step 5: Verify the channel appears in the sidebar",
+      "Step 6: Verify GET /api/workspaces/:slug/channels returns the new channel"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Channel name is enforced to be kebab-case (lowercase, hyphens only)",
+    "steps": [
+      "Step 1: Attempt to create channel named 'My Channel Name'",
+      "Step 2: Verify the name input auto-converts to 'my-channel-name' or shows an error",
+      "Step 3: Verify the API rejects names with spaces or uppercase letters with 400 status"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can browse and join public channels they are not in",
+    "steps": [
+      "Step 1: Create a workspace with channels #general, #announcements, #dev",
+      "Step 2: Log in as User B who is only in #general",
+      "Step 3: Open the channel browser",
+      "Step 4: Verify #announcements and #dev appear in the list",
+      "Step 5: Click 'Join' on #announcements",
+      "Step 6: Verify #announcements appears in User B's channel sidebar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Private channels do not appear in the channel browser",
+    "steps": [
+      "Step 1: Create a private channel named 'secret-ops'",
+      "Step 2: Log in as another workspace member",
+      "Step 3: Open channel browser",
+      "Step 4: Verify 'secret-ops' does not appear in the list"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can send a text message to a channel",
+    "steps": [
+      "Step 1: Navigate to a channel as an authenticated user",
+      "Step 2: Click the message composer",
+      "Step 3: Type 'Hello world!'",
+      "Step 4: Press Enter",
+      "Step 5: Verify the message appears in the messages list",
+      "Step 6: Verify POST /api/messages returns 201 with message data",
+      "Step 7: Verify the message is stored in the database"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Messages appear in real time for another connected user in the same channel",
+    "steps": [
+      "Step 1: Open two browser sessions \u2014 User A and User B both in the same channel",
+      "Step 2: User A types and sends 'Real-time test'",
+      "Step 3: Verify the message appears in User B's view without page refresh",
+      "Step 4: Verify the message appears within 500ms"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Typing indicator appears for other users when someone is composing a message",
+    "steps": [
+      "Step 1: Open two browser sessions in the same channel",
+      "Step 2: User A starts typing in the composer",
+      "Step 3: Verify a typing indicator appears for User B ('User A is typing...')",
+      "Step 4: User A stops typing for 3 seconds",
+      "Step 5: Verify the typing indicator disappears"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Message history loads in pages of 50 and infinite scroll loads older messages",
+    "steps": [
+      "Step 1: Send 120 messages in a channel",
+      "Step 2: Open the channel \u2014 verify the initial 50 most recent messages load",
+      "Step 3: Scroll to the top of the message list",
+      "Step 4: Verify another 50 messages load (the next page)",
+      "Step 5: Scroll to top again \u2014 verify the final 20 messages load",
+      "Step 6: Verify no additional loading spinner appears at the top (all messages loaded)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Day separator dividers appear between messages from different calendar days",
+    "steps": [
+      "Step 1: Seed the database with messages on two different dates (e.g., Feb 22 and Feb 23)",
+      "Step 2: Open the channel",
+      "Step 3: Verify a divider with the date label appears between the two day groups"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Message author can edit their own message",
+    "steps": [
+      "Step 1: Send a message as User A",
+      "Step 2: Hover over the message and click 'Edit'",
+      "Step 3: Change the text and confirm edit",
+      "Step 4: Verify the message text is updated in the UI",
+      "Step 5: Verify PATCH /api/messages/:id returns 200",
+      "Step 6: Verify the message shows an '(edited)' label"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Non-author cannot edit another user's message",
+    "steps": [
+      "Step 1: User A sends a message",
+      "Step 2: Log in as User B",
+      "Step 3: Hover over User A's message",
+      "Step 4: Verify no 'Edit' option is shown for User B",
+      "Step 5: Verify PATCH /api/messages/:id returns 403 when called as User B"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Message author can delete their own message (soft delete)",
+    "steps": [
+      "Step 1: Send a message as User A",
+      "Step 2: Hover the message, click 'Delete', confirm deletion",
+      "Step 3: Verify the message is replaced with '[Message deleted]' or removed from UI",
+      "Step 4: Verify the message's deleted_at field is set in the database (not hard deleted)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Optimistic UI shows message immediately before server confirmation",
+    "steps": [
+      "Step 1: Open the channel with network throttled to slow 3G",
+      "Step 2: Type and send a message",
+      "Step 3: Verify the message appears in the list immediately (before API response)",
+      "Step 4: Verify the message transitions from 'pending' to 'confirmed' state",
+      "Step 5: Restore network and verify the message is persisted correctly"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can open a DM conversation with another workspace member",
+    "steps": [
+      "Step 1: Navigate to a workspace as User A",
+      "Step 2: Click the '+' in the DMs section of the sidebar",
+      "Step 3: Search for User B by username",
+      "Step 4: Select User B to open the DM",
+      "Step 5: Verify a DM conversation opens (URL updates to /w/:slug/dm/:id)",
+      "Step 6: Verify POST /api/workspaces/:slug/dms returns the conversation object"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "DM messages are private between the two participants only",
+    "steps": [
+      "Step 1: User A sends a DM to User B: 'Private message'",
+      "Step 2: Log in as User C who is in the same workspace",
+      "Step 3: Verify User C cannot access the DM conversation via the API (403 or 404)",
+      "Step 4: Verify the DM does not appear anywhere in User C's UI"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "DM appears in the sidebar after the first message is sent",
+    "steps": [
+      "Step 1: User A opens a DM with User B",
+      "Step 2: User A sends 'Hi there!'",
+      "Step 3: Verify the DM appears in the DMs section of User A's sidebar",
+      "Step 4: Verify User B also sees the DM in their sidebar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Unread count badge appears on a channel when new messages arrive",
+    "steps": [
+      "Step 1: User A is in workspace but has #dev channel out of focus",
+      "Step 2: User B sends 3 messages to #dev",
+      "Step 3: Verify User A sees a bold '#dev' with a badge or dot in the sidebar",
+      "Step 4: User A clicks #dev",
+      "Step 5: Verify the unread indicator disappears after opening the channel"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Thread reply opens a thread panel and posts to the correct parent",
+    "steps": [
+      "Step 1: Send a message in a channel",
+      "Step 2: Hover over the message and click 'Reply in thread'",
+      "Step 3: Verify a thread panel slides in from the right",
+      "Step 4: Verify the parent message is shown at the top of the thread panel",
+      "Step 5: Type a reply and press Enter",
+      "Step 6: Verify the reply appears in the thread panel",
+      "Step 7: Verify the reply does NOT appear in the main channel message list",
+      "Step 8: Verify the parent message shows '1 reply' below it in the channel"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Thread replies are returned by GET /api/messages/:id/thread",
+    "steps": [
+      "Step 1: Post 3 replies to a thread parent message",
+      "Step 2: GET /api/messages/:id/thread",
+      "Step 3: Verify response contains all 3 replies in chronological order",
+      "Step 4: Verify replies have thread_parent_id set to the parent message id"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can update their display name and status",
+    "steps": [
+      "Step 1: Navigate to Profile settings",
+      "Step 2: Change display name to 'New Name'",
+      "Step 3: Add status emoji '\ud83d\ude80' and status text 'Shipping features'",
+      "Step 4: Save changes",
+      "Step 5: Verify PATCH /api/users/me returns updated data",
+      "Step 6: Verify the new display name appears next to messages sent by the user"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can upload an avatar image",
+    "steps": [
+      "Step 1: Navigate to Profile settings",
+      "Step 2: Click the avatar upload area",
+      "Step 3: Select a small PNG or JPG image file",
+      "Step 4: Verify the avatar preview updates",
+      "Step 5: Save and verify the avatar appears in the workspace sidebar and on messages"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Profile popover appears when clicking a user's avatar or name",
+    "steps": [
+      "Step 1: Navigate to a channel with multiple users",
+      "Step 2: Click on any user's avatar in a message",
+      "Step 3: Verify a popover opens showing username, display name, status, and avatar",
+      "Step 4: Verify the popover closes when clicking outside it"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can change their password from settings",
+    "steps": [
+      "Step 1: Navigate to Password settings page",
+      "Step 2: Enter current password correctly",
+      "Step 3: Enter new password 'NewPass456!'",
+      "Step 4: Confirm new password",
+      "Step 5: Save",
+      "Step 6: Log out and log in with the new password",
+      "Step 7: Verify login succeeds"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Presence indicator shows green dot for online users",
+    "steps": [
+      "Step 1: User A and User B are both connected to the WebSocket",
+      "Step 2: Navigate to a channel where User B has sent a message",
+      "Step 3: Verify User B's avatar has a green dot overlay",
+      "Step 4: User B closes their browser (disconnects)",
+      "Step 5: Verify the green dot disappears from User B's avatar within 5 seconds"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Browser tab title shows unread count when the tab is not focused",
+    "steps": [
+      "Step 1: Open app in a browser tab and switch focus to another tab",
+      "Step 2: Have another user send 3 messages to the current channel",
+      "Step 3: Verify the browser tab title changes to '(3) Colloquium Chat'",
+      "Step 4: Switch back to the app tab",
+      "Step 5: Verify the title resets to 'Colloquium Chat'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "@mention highlights the username in the message text",
+    "steps": [
+      "Step 1: User A sends message 'Hey @testuser check this out'",
+      "Step 2: Verify the '@testuser' portion of the rendered message is visually highlighted",
+      "Step 3: Verify the message appears in a special notification section for testuser"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Workspace owner can archive a channel",
+    "steps": [
+      "Step 1: Log in as workspace owner",
+      "Step 2: Open channel settings for #dev",
+      "Step 3: Click 'Archive channel'",
+      "Step 4: Confirm the action",
+      "Step 5: Verify the channel no longer appears in the active channel sidebar",
+      "Step 6: Verify is_archived=1 in the database"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "WebSocket reconnects automatically after connection drop",
+    "steps": [
+      "Step 1: Open the app and connect WebSocket",
+      "Step 2: Simulate network disconnect (DevTools \u2192 offline for 2 seconds)",
+      "Step 3: Restore network",
+      "Step 4: Verify the app reconnects (exponential backoff attempts are visible in console)",
+      "Step 5: Verify messages continue to be received after reconnect"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Markdown renders bold, italic, and inline code in messages",
+    "steps": [
+      "Step 1: Send a message containing '**bold** _italic_ `code`'",
+      "Step 2: Verify the rendered message shows bold text, italic text, and monospace code",
+      "Step 3: Verify the raw Markdown syntax characters are not visible in the rendered message"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Fenced code blocks render with syntax highlighting",
+    "steps": [
+      "Step 1: Send a message with a code block: ```javascript\\nconst x = 1;\\n```",
+      "Step 2: Verify the code block is rendered with a dark background",
+      "Step 3: Verify JavaScript syntax tokens are color-highlighted (keywords, strings different colors)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Message composer enforces 4000 character limit",
+    "steps": [
+      "Step 1: In the composer, paste text of exactly 4001 characters",
+      "Step 2: Verify the composer shows an error or truncates at 4000 characters",
+      "Step 3: Verify the Send button is disabled when over the limit",
+      "Step 4: Verify a character counter shows the count, with warning styling near the limit"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Shift+Enter inserts a newline in the composer without sending",
+    "steps": [
+      "Step 1: Navigate to a channel and click the composer",
+      "Step 2: Type 'Line one'",
+      "Step 3: Press Shift+Enter",
+      "Step 4: Type 'Line two'",
+      "Step 5: Verify the composer shows two lines without sending the message",
+      "Step 6: Press Enter to send",
+      "Step 7: Verify the sent message contains a line break between the two lines"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Emoji picker inserts emoji into the composer at cursor position",
+    "steps": [
+      "Step 1: Click the emoji icon in the composer toolbar",
+      "Step 2: Verify an emoji picker popover opens",
+      "Step 3: Click on an emoji (e.g., \ud83d\ude0a)",
+      "Step 4: Verify the emoji is inserted into the composer text at the current cursor position",
+      "Step 5: Verify the picker closes after selection"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "API returns consistent error shape for all 4xx responses",
+    "steps": [
+      "Step 1: Trigger a 404 error (GET /api/nonexistent)",
+      "Step 2: Verify response JSON has { error: string, code: string } shape",
+      "Step 3: Trigger a 422 error (POST /api/auth/register with missing fields)",
+      "Step 4: Verify same error shape with validation details"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "SQLite WAL mode is enabled for the database",
+    "steps": [
+      "Step 1: Start the API server",
+      "Step 2: Query the database with PRAGMA journal_mode",
+      "Step 3: Verify the result is 'wal'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Workspace settings page allows owner to rename the workspace",
+    "steps": [
+      "Step 1: Navigate to workspace settings as the owner",
+      "Step 2: Change workspace name to 'Renamed Team'",
+      "Step 3: Save",
+      "Step 4: Verify PATCH /api/workspaces/:slug succeeds",
+      "Step 5: Verify the new name appears in the workspace rail tooltip and sidebar header"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Non-owner members cannot access workspace settings write operations",
+    "steps": [
+      "Step 1: Log in as a 'member' role user in a workspace",
+      "Step 2: PATCH /api/workspaces/:slug with a name change",
+      "Step 3: Verify response is 403 Forbidden",
+      "Step 4: Verify workspace name is unchanged in the database"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Members list shows all workspace members with their roles and online status",
+    "steps": [
+      "Step 1: Have 3 users in a workspace (1 owner, 1 admin, 1 member)",
+      "Step 2: Navigate to the workspace members list",
+      "Step 3: Verify all 3 users appear with their correct roles displayed",
+      "Step 4: Verify online users have a green indicator"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Turbo build succeeds for both frontend and API packages",
+    "steps": [
+      "Step 1: Run `pnpm turbo build --filter=colloquium-chat... --filter=colloquium-chat-api...`",
+      "Step 2: Verify exit code is 0",
+      "Step 3: Verify apps/colloquium-chat/dist directory is created",
+      "Step 4: Verify apps/colloquium-chat-api/dist directory is created"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "TypeScript strict mode passes with zero errors across both packages",
+    "steps": [
+      "Step 1: Run `pnpm turbo typecheck --filter=colloquium-chat... --filter=colloquium-chat-api...`",
+      "Step 2: Verify exit code is 0",
+      "Step 3: Verify no 'any' types without explanatory comments in the output"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Frontend Vite dev server starts on port 5173",
+    "steps": [
+      "Step 1: Run `pnpm dev` in apps/colloquium-chat",
+      "Step 2: Verify server output shows 'Local: http://localhost:5173'",
+      "Step 3: Verify navigating to http://localhost:5173 renders the app"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "API server starts on port 5001",
+    "steps": [
+      "Step 1: Run `pnpm dev` in apps/colloquium-chat-api",
+      "Step 2: Verify server output shows port 5001",
+      "Step 3: Verify GET http://localhost:5001/api/health returns 200"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Channel header shows channel name, description, and member count",
+    "steps": [
+      "Step 1: Create a channel with description 'For dev discussions'",
+      "Step 2: Navigate to the channel",
+      "Step 3: Verify the header shows '#channel-name'",
+      "Step 4: Verify the description 'For dev discussions' is visible in the header",
+      "Step 5: Verify a member count chip shows the correct number of members"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "GET /api/workspaces/:slug/channels/browse only returns public non-archived channels",
+    "steps": [
+      "Step 1: Create workspace with: #public-one (public), #secret (private), #old (archived)",
+      "Step 2: GET /api/workspaces/:slug/channels/browse",
+      "Step 3: Verify #public-one appears",
+      "Step 4: Verify #secret does NOT appear",
+      "Step 5: Verify #old does NOT appear"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Drizzle ORM migrations run successfully on fresh database",
+    "steps": [
+      "Step 1: Delete the SQLite database file",
+      "Step 2: Run `pnpm db:migrate` in colloquium-chat-api",
+      "Step 3: Verify all tables are created: users, workspaces, channels, messages, etc.",
+      "Step 4: Verify the exit code is 0"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Message timestamps are relative for recent messages and absolute for older ones",
+    "steps": [
+      "Step 1: Send a message (timestamp should show e.g. '2 min ago')",
+      "Step 2: Seed a message with a timestamp 2 days ago",
+      "Step 3: Verify recent message shows relative time",
+      "Step 4: Verify old message shows an absolute date-time format (e.g., 'Feb 21, 2026 at 3:45 PM')"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Sending an empty message (whitespace only) is rejected by both UI and API",
+    "steps": [
+      "Step 1: Focus the composer and type only spaces",
+      "Step 2: Verify the Send button is disabled",
+      "Step 3: POST /api/messages with content '   '",
+      "Step 4: Verify response is 422 Unprocessable Entity"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Thread reply count updates in real time for all channel viewers",
+    "steps": [
+      "Step 1: User A has a channel open and sees a message with 0 replies",
+      "Step 2: User B opens the thread and posts a reply",
+      "Step 3: Verify User A sees the reply count update to '1 reply' without refreshing"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "DM unread count appears in sidebar when receiving a new DM while on another view",
+    "steps": [
+      "Step 1: User A is viewing a channel (not their DM with User B)",
+      "Step 2: User B sends User A a DM",
+      "Step 3: Verify User A's DM list in the sidebar shows User B's name bold with unread indicator"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "pnpm install completes without errors in the monorepo",
+    "steps": [
+      "Step 1: Run `pnpm install` from the repository root",
+      "Step 2: Verify exit code is 0",
+      "Step 3: Verify node_modules are created in apps/colloquium-chat and apps/colloquium-chat-api",
+      "Step 4: Verify no peer dependency warnings that would break the build"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User can leave a workspace from workspace settings",
+    "steps": [
+      "Step 1: Log in as a 'member' user in a workspace",
+      "Step 2: Navigate to workspace settings \u2192 danger zone",
+      "Step 3: Click 'Leave workspace' and confirm",
+      "Step 4: Verify redirect to a workspace selection page or /w/new",
+      "Step 5: Verify the workspace no longer appears in the user's workspace rail"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Owner cannot leave workspace if they are the last member",
+    "steps": [
+      "Step 1: Create a workspace as User A with no other members",
+      "Step 2: Attempt to leave the workspace",
+      "Step 3: Verify an error message: 'Transfer ownership before leaving' or similar",
+      "Step 4: Verify the user remains in the workspace"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Messages API paginates correctly with before cursor",
+    "steps": [
+      "Step 1: Send 60 messages in a channel",
+      "Step 2: GET /api/messages?channelId=X&limit=50 \u2014 verify 50 newest messages returned",
+      "Step 3: Take the oldest message id from step 2 as cursor: GET /api/messages?channelId=X&limit=50&before=:id",
+      "Step 4: Verify 10 remaining messages are returned",
+      "Step 5: Another call with before cursor returns empty array (hasMore: false)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "WebSocket sends user.typing event throttled to at most once per 500ms",
+    "steps": [
+      "Step 1: Monitor WebSocket frames in DevTools",
+      "Step 2: Type rapidly in the composer (10 keystrokes in 1 second)",
+      "Step 3: Verify no more than 3 user.typing frames are sent during that 1 second",
+      "Step 4: Verify a user.typing.stop or silence after 3s removes typing indicator on other clients"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Frontend route /w/:slug/channel/:name correctly loads the channel",
+    "steps": [
+      "Step 1: Navigate directly to /w/my-workspace/channel/general",
+      "Step 2: Verify the channel header shows '#general'",
+      "Step 3: Verify messages load",
+      "Step 4: Verify the channel is highlighted in the sidebar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Attempting to access a workspace you are not a member of returns 403",
+    "steps": [
+      "Step 1: Create Workspace A as User A",
+      "Step 2: Log in as User B who has no membership in Workspace A",
+      "Step 3: GET /api/workspaces/workspace-a-slug",
+      "Step 4: Verify response is 403 Forbidden"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Zustand store correctly persists active workspace and channel selection across navigation",
+    "steps": [
+      "Step 1: Navigate to workspace 'team-a' and channel '#dev'",
+      "Step 2: Navigate to workspace 'team-b' (switching workspaces)",
+      "Step 3: Navigate back to workspace 'team-a'",
+      "Step 4: Verify the previously active channel '#dev' is restored for 'team-a'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Invite link works only once when max_uses is set to 1",
+    "steps": [
+      "Step 1: Generate an invite link with max_uses=1",
+      "Step 2: User B uses the link to join",
+      "Step 3: User C attempts to use the same link",
+      "Step 4: Verify User C gets a 410 Gone or 400 response indicating the link is exhausted"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Refreshing the page restores the user's active workspace and channel view",
+    "steps": [
+      "Step 1: Navigate to /w/my-workspace/channel/dev",
+      "Step 2: Refresh the browser",
+      "Step 3: Verify the same workspace and channel re-load correctly",
+      "Step 4: Verify the user does not have to re-authenticate"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "WebSocket connection authenticates using the access_token cookie",
+    "steps": [
+      "Step 1: Connect to WS /ws without a valid token",
+      "Step 2: Verify the server closes the connection with code 4001 (Unauthorized)",
+      "Step 3: Connect with a valid access_token",
+      "Step 4: Verify the connection remains open and receives a welcome/ack event"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Soft-deleted messages show placeholder text, not raw content",
+    "steps": [
+      "Step 1: Author deletes a message",
+      "Step 2: Other users viewing the channel see '[This message was deleted]' in place of the content",
+      "Step 3: Verify the original content field in the database has deleted_at set but content preserved server-side"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Channel members count decrements when a user leaves the workspace",
+    "steps": [
+      "Step 1: Workspace has User A and User B, both members of #general (count: 2)",
+      "Step 2: User B leaves the workspace",
+      "Step 3: Navigate to #general as User A",
+      "Step 4: Verify member count in channel header shows 1"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "App displays a 404 page for unknown routes",
+    "steps": [
+      "Step 1: Navigate to /some/nonexistent/route",
+      "Step 2: Verify a 404 or 'Page not found' component renders",
+      "Step 3: Verify the page includes a link to go back to the home/workspace page"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Workspace icon in rail shows emoji or initials avatar when no custom image",
+    "steps": [
+      "Step 1: Create workspace 'Alpha Corp' with emoji icon '\ud83d\ude80'",
+      "Step 2: Create workspace 'Beta Inc' with no icon",
+      "Step 3: Verify 'Alpha Corp' workspace icon shows '\ud83d\ude80'",
+      "Step 4: Verify 'Beta Inc' workspace icon shows 'B' as an initials avatar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Message edit history: edited_at timestamp is set on edit",
+    "steps": [
+      "Step 1: Send a message",
+      "Step 2: Edit the message",
+      "Step 3: GET /api/messages?channelId=X",
+      "Step 4: Verify the edited message has edited_at set to a non-null timestamp"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Admin can delete other members' messages in their workspace",
+    "steps": [
+      "Step 1: User A is workspace admin; User B sends a message",
+      "Step 2: User A (admin) calls DELETE /api/messages/:id on User B's message",
+      "Step 3: Verify response is 200 and deleted_at is set"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Channel description can be updated by admins",
+    "steps": [
+      "Step 1: Log in as workspace admin",
+      "Step 2: PATCH /api/workspaces/:slug/channels/:name with { description: 'New description' }",
+      "Step 3: Verify response is 200",
+      "Step 4: Navigate to the channel \u2014 verify the header shows 'New description'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "GET /api/workspaces returns only workspaces the current user belongs to",
+    "steps": [
+      "Step 1: User A is in Workspace 1 and Workspace 2",
+      "Step 2: User B is only in Workspace 1",
+      "Step 3: GET /api/workspaces as User B",
+      "Step 4: Verify only Workspace 1 is returned (not Workspace 2)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Composer renders markdown preview toggle correctly",
+    "steps": [
+      "Step 1: Type '**Hello** _world_' in the composer",
+      "Step 2: Click the preview toggle button",
+      "Step 3: Verify the composer switches to a rendered view showing bold 'Hello' and italic 'world'",
+      "Step 4: Click preview toggle again to return to edit mode",
+      "Step 5: Verify raw markdown text is editable again"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Thread panel closes when clicking outside it or pressing Escape",
+    "steps": [
+      "Step 1: Open a thread panel",
+      "Step 2: Press Escape key",
+      "Step 3: Verify the thread panel closes",
+      "Step 4: Open thread panel again",
+      "Step 5: Click on the main chat area outside the panel",
+      "Step 6: Verify the panel closes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Channel sidebar sections (Channels, DMs) can be collapsed and expanded",
+    "steps": [
+      "Step 1: Click the 'Channels' section header to collapse it",
+      "Step 2: Verify the channel list is hidden",
+      "Step 3: Click again to expand",
+      "Step 4: Verify channels reappear",
+      "Step 5: Verify collapse state is preserved after navigating to a different view"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "App renders with a dark background (#0d0d0d) on all main areas",
+    "steps": [
+      "Step 1: Open the app in a browser",
+      "Step 2: Take a screenshot of the full-page layout",
+      "Step 3: Verify the body/main background color is #0d0d0d or equivalent near-black"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace rail column has surface background (#161616) and correct width (~64px)",
+    "steps": [
+      "Step 1: Open the app with at least one workspace",
+      "Step 2: Inspect the workspace rail element",
+      "Step 3: Verify background-color is #161616",
+      "Step 4: Verify computed width is approximately 64px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel sidebar has surface background and correct width (~240px)",
+    "steps": [
+      "Step 1: Open a workspace",
+      "Step 2: Inspect the channel sidebar",
+      "Step 3: Verify background-color is #161616",
+      "Step 4: Verify computed width is approximately 240px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Active workspace icon in rail shows a white ring/border highlight",
+    "steps": [
+      "Step 1: Open a workspace so it is active",
+      "Step 2: Inspect the active workspace icon in the rail",
+      "Step 3: Verify a visible ring or border using the accent color (#ffffff) surrounds the icon"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Active channel in sidebar shows left accent border and elevated background",
+    "steps": [
+      "Step 1: Click on a channel to make it active",
+      "Step 2: Inspect the active channel row in the sidebar",
+      "Step 3: Verify a left border in accent color (#ffffff) is visible",
+      "Step 4: Verify the row background is Surface2 (#1e1e1e)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Unread channel shows bold name and indigo (#5865f2) unread dot",
+    "steps": [
+      "Step 1: Trigger unread state on a channel",
+      "Step 2: Inspect the channel row in the sidebar",
+      "Step 3: Verify channel name font-weight is 600 or bold",
+      "Step 4: Verify an 8px circular badge with color #5865f2 is rendered"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Message rows have correct 12px vertical padding and 36px avatar",
+    "steps": [
+      "Step 1: Send a message and view the channel",
+      "Step 2: Inspect a message row element",
+      "Step 3: Verify padding-top and padding-bottom are 12px",
+      "Step 4: Verify the avatar element inside the row is 36\u00d736px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Composer box has rounded corners, border, and correct background",
+    "steps": [
+      "Step 1: Open a channel and inspect the message composer",
+      "Step 2: Verify border-radius is at least 8px (rounded-lg equivalent)",
+      "Step 3: Verify border is 1px solid #2a2a2a",
+      "Step 4: Verify background-color is #161616 (Surface)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Inter font is loaded and applied to body text",
+    "steps": [
+      "Step 1: Open the app",
+      "Step 2: Inspect the body or main content element",
+      "Step 3: Verify font-family includes 'Inter' as the first choice",
+      "Step 4: Verify the font is actually loaded (check network requests for an Inter font file)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Code blocks use JetBrains Mono font at 13px",
+    "steps": [
+      "Step 1: Send a message with a fenced code block",
+      "Step 2: Inspect the rendered code block element",
+      "Step 3: Verify font-family includes 'JetBrains Mono'",
+      "Step 4: Verify font-size is 13px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Primary text color is #e8e8e8 (not pure white) for body content",
+    "steps": [
+      "Step 1: Send a message and inspect the message content element",
+      "Step 2: Verify color is #e8e8e8",
+      "Step 3: Inspect a sidebar channel name",
+      "Step 4: Verify channel name uses #e8e8e8 as well"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Muted text (timestamps, placeholders) uses #6b6b6b",
+    "steps": [
+      "Step 1: Send a message and inspect the timestamp element",
+      "Step 2: Verify color is #6b6b6b",
+      "Step 3: Inspect the composer placeholder text",
+      "Step 4: Verify placeholder color is #6b6b6b"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Login / register page shows centered card on dark background",
+    "steps": [
+      "Step 1: Navigate to /login",
+      "Step 2: Take a screenshot",
+      "Step 3: Verify the form is centered horizontally and vertically",
+      "Step 4: Verify the background behind the card is #0d0d0d",
+      "Step 5: Verify the card itself has a Surface (#161616) or Surface2 (#1e1e1e) background"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Buttons use correct variant styles \u2014 primary (white bg, black text) and ghost",
+    "steps": [
+      "Step 1: Locate a primary action button (e.g., 'Sign in' or 'Create workspace')",
+      "Step 2: Verify background-color is #ffffff and color is #000000",
+      "Step 3: Locate a ghost button (e.g., 'Cancel')",
+      "Step 4: Verify the ghost button has a transparent background and shows a Surface2 bg on hover"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Danger buttons (Delete, Leave) use #ef4444 red color",
+    "steps": [
+      "Step 1: Navigate to workspace settings danger zone",
+      "Step 2: Inspect the 'Leave workspace' or 'Delete workspace' button",
+      "Step 3: Verify background-color is #ef4444",
+      "Step 4: Verify the button text is white for contrast"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Avatar fallback shows initials on Surface2 background when no image",
+    "steps": [
+      "Step 1: Log in as a user with no avatar uploaded",
+      "Step 2: View any message sent by this user",
+      "Step 3: Verify the avatar circle shows the user's initials (e.g., 'AT' for Ali Taccebeci)",
+      "Step 4: Verify the avatar background is #1e1e1e (Surface2)",
+      "Step 5: Verify the initials text is white/light"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Online presence dot is green, 10px, and positioned bottom-right of avatar",
+    "steps": [
+      "Step 1: Have a user online (connected)",
+      "Step 2: View their avatar in the channel or sidebar",
+      "Step 3: Verify a circular green dot (approx. 10px) is visible at the bottom-right corner of their avatar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Message hover reveals action buttons without layout shift",
+    "steps": [
+      "Step 1: Hover over a message in the channel",
+      "Step 2: Verify action icons (reply, edit, delete) appear in a floating bar above the message",
+      "Step 3: Verify no surrounding messages shift vertically when hover state activates",
+      "Step 4: Verify the action bar has a Surface (#161616) background and border"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Day separator divider has centered date label on a horizontal line",
+    "steps": [
+      "Step 1: View a channel with messages spanning multiple days",
+      "Step 2: Verify a horizontal rule divider is visible between message groups",
+      "Step 3: Verify a date label (e.g., 'February 22, 2026') is centered on or above the line",
+      "Step 4: Verify the divider text is in muted color #6b6b6b"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "New message fade-in animation plays when a message arrives",
+    "steps": [
+      "Step 1: Open a channel with another user",
+      "Step 2: Have User B send a message",
+      "Step 3: Verify the new message element has a brief fade-in animation (120ms ease-out)",
+      "Step 4: Verify the animation does not cause a flash of unstyled content"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Thread panel slides in from the right with a 200ms ease-out transition",
+    "steps": [
+      "Step 1: Open a thread from a message",
+      "Step 2: Verify the panel animates in from the right edge",
+      "Step 3: Verify the animation duration is approximately 200ms",
+      "Step 4: Verify the main chat area compresses or overlays cleanly"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Typing indicator shows animated bouncing dots",
+    "steps": [
+      "Step 1: Have User B start typing in a channel",
+      "Step 2: As User A, observe the typing indicator area above the composer",
+      "Step 3: Verify an animated element with 2-3 dots is visible",
+      "Step 4: Verify the dots bounce or pulse in a looping animation"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Markdown bold/italic/code renders with visually distinct styling",
+    "steps": [
+      "Step 1: Send a message with **bold** _italic_ and `inline code`",
+      "Step 2: Verify bold text has higher font-weight (700)",
+      "Step 3: Verify italic text has font-style: italic",
+      "Step 4: Verify inline code has a monospace font and a subtle background (e.g., Surface2)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "@mention text is highlighted in the accent/indigo color",
+    "steps": [
+      "Step 1: Send a message containing '@testuser'",
+      "Step 2: Verify '@testuser' is rendered with a distinct color or background highlight",
+      "Step 3: Verify the highlight uses the Unread/accent color (#5865f2)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace name and sidebar header typography is correct",
+    "steps": [
+      "Step 1: Open a workspace",
+      "Step 2: Inspect the workspace name in the sidebar header",
+      "Step 3: Verify font-weight is semi-bold (600) or bold",
+      "Step 4: Verify font-size is 16px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Sidebar section labels (CHANNELS, DIRECT MESSAGES) are 13px medium weight",
+    "steps": [
+      "Step 1: Open a workspace and inspect the 'Channels' section label",
+      "Step 2: Verify font-size is 13px",
+      "Step 3: Verify font-weight is 500 (medium)",
+      "Step 4: Verify the label text is in muted color #6b6b6b"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Profile popover has correct surface background and border",
+    "steps": [
+      "Step 1: Click a user's avatar to open the profile popover",
+      "Step 2: Inspect the popover element",
+      "Step 3: Verify background is #161616 (Surface)",
+      "Step 4: Verify there is a 1px border in #2a2a2a",
+      "Step 5: Verify the popover has border-radius >= 8px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Reply count badge on parent message is visually distinct (indigo text/color)",
+    "steps": [
+      "Step 1: Post replies in a thread",
+      "Step 2: View the parent message in the channel",
+      "Step 3: Verify a '2 replies' link/badge is visible below the message content",
+      "Step 4: Verify the text or icon uses the indigo accent color #5865f2"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Empty channel state shows a welcome/empty state illustration and text",
+    "steps": [
+      "Step 1: Create a new channel with no messages",
+      "Step 2: Navigate to the channel",
+      "Step 3: Verify an empty state UI is shown (not a blank white space)",
+      "Step 4: Verify text says something like 'This is the beginning of #channel-name'",
+      "Step 5: Verify an icon or simple illustration accompanies the text"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Skeleton loaders appear while messages are being fetched",
+    "steps": [
+      "Step 1: Slow down network (3G throttle)",
+      "Step 2: Navigate to a channel",
+      "Step 3: Verify skeleton placeholder rows appear while the message list is loading",
+      "Step 4: Verify the skeletons use a subtle animated shimmer effect",
+      "Step 5: Verify skeletons disappear when messages load"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Mobile layout hides the sidebar behind a hamburger menu",
+    "steps": [
+      "Step 1: Resize the browser viewport to 375px width (iPhone-size)",
+      "Step 2: Verify the channel sidebar and workspace rail are hidden",
+      "Step 3: Verify a hamburger menu icon is visible in the header",
+      "Step 4: Click the hamburger",
+      "Step 5: Verify the sidebar slides in as a drawer overlay"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Mobile composer is touch-friendly with adequate tap target size (\u226544px height)",
+    "steps": [
+      "Step 1: Set viewport to 375px width",
+      "Step 2: View the message composer",
+      "Step 3: Verify the composer input area is at least 44px tall",
+      "Step 4: Verify the send button has a tap target of at least 44\u00d744px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Settings page uses a sidebar nav + right content panel layout",
+    "steps": [
+      "Step 1: Navigate to profile settings",
+      "Step 2: Verify a left navigation panel shows settings categories (Profile, Password, Workspace)",
+      "Step 3: Verify the right panel shows the content for the active settings category",
+      "Step 4: Verify clicking a different category updates the right panel without full page reload"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace settings danger zone is visually separated from other settings",
+    "steps": [
+      "Step 1: Navigate to workspace settings",
+      "Step 2: Scroll to the danger zone section",
+      "Step 3: Verify it is visually separated (e.g., red border or red section header 'Danger Zone')",
+      "Step 4: Verify the separator makes the section stand out as destructive"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Invite link display has a copy-to-clipboard button with visual feedback",
+    "steps": [
+      "Step 1: Generate an invite link in workspace settings",
+      "Step 2: Verify the link is shown in a read-only input or code block",
+      "Step 3: Verify a 'Copy' button is adjacent to the link",
+      "Step 4: Click 'Copy' and verify it changes to 'Copied!' with a brief animation"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Emoji picker is styled consistently with the dark theme",
+    "steps": [
+      "Step 1: Click the emoji icon in the composer to open the picker",
+      "Step 2: Verify the picker background is #161616 or #1e1e1e (not white)",
+      "Step 3: Verify emoji cells have hover states in Surface2 color",
+      "Step 4: Verify the picker has a border matching #2a2a2a"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel browser modal/page has correct dark styling",
+    "steps": [
+      "Step 1: Open the channel browser",
+      "Step 2: Verify the background is dark (#0d0d0d or #161616)",
+      "Step 3: Verify each channel row has hover state in Surface2",
+      "Step 4: Verify the 'Join' button uses the primary style (white bg)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Focus rings are visible on all interactive elements for keyboard accessibility",
+    "steps": [
+      "Step 1: Tab through the UI elements on the login page",
+      "Step 2: Verify each focused element shows a visible focus ring",
+      "Step 3: Verify focus ring uses the accent color (#ffffff) outline",
+      "Step 4: Tab through the sidebar channel list and verify focus rings on each channel row"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "No white background bleeds through on any dark theme component",
+    "steps": [
+      "Step 1: Open the app and navigate through all main views (channel, DM, settings, profile)",
+      "Step 2: Take screenshots of each view",
+      "Step 3: Verify no component shows a white or near-white (#f0f0f0+) background",
+      "Step 4: Verify all dialogs, modals, popovers, and dropdowns use dark surfaces"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Member role badges (owner, admin, member) are visually distinguishable",
+    "steps": [
+      "Step 1: View the workspace members list with users of different roles",
+      "Step 2: Verify 'owner' has a distinct badge/label (e.g., outlined in accent)",
+      "Step 3: Verify 'admin' has a different badge from 'member'",
+      "Step 4: Verify all badges are legible on the dark surface background"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Thread panel parent message is visually distinct from replies",
+    "steps": [
+      "Step 1: Open a thread panel",
+      "Step 2: Verify the parent message at the top is visually separated from replies (e.g., by a divider or background)",
+      "Step 3: Verify replies have slightly different indentation or visual treatment"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Loading spinner/indicator is shown while performing authentication actions",
+    "steps": [
+      "Step 1: Slow down the network",
+      "Step 2: Click 'Sign in' on the login page",
+      "Step 3: Verify a loading indicator (spinner or skeleton) appears on the button or form",
+      "Step 4: Verify the submit button is disabled while loading"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace creation form is visually clean and matches the dark theme",
+    "steps": [
+      "Step 1: Navigate to the workspace creation page (/w/new)",
+      "Step 2: Verify the form has dark background inputs with #2a2a2a border",
+      "Step 3: Verify input focus state uses the accent (#ffffff) ring",
+      "Step 4: Verify the emoji picker for workspace icon is inline and matches the dark theme"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Color transitions for hover/active states are 100ms ease",
+    "steps": [
+      "Step 1: Inspect a channel row in the sidebar via DevTools",
+      "Step 2: Verify transition property includes 'background-color 100ms ease' or 'all 100ms ease'",
+      "Step 3: Hover the element and verify the state change is visually smooth"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Edited message shows '(edited)' label in muted color",
+    "steps": [
+      "Step 1: Edit a previously sent message",
+      "Step 2: Verify the message now shows '(edited)' appended after the content",
+      "Step 3: Verify '(edited)' is in muted text color #6b6b6b",
+      "Step 4: Verify the label is smaller than the message text"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "DM header shows recipient avatar, name, and online status clearly",
+    "steps": [
+      "Step 1: Open a DM conversation",
+      "Step 2: Verify the header shows the recipient's avatar (36px or larger)",
+      "Step 3: Verify the display name or username is shown in the header",
+      "Step 4: Verify the online status indicator (green dot or 'Active now' text) is visible"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "User status emoji and text display next to username in profile popover",
+    "steps": [
+      "Step 1: Set a status '\ud83d\ude80 Shipping features' for a user",
+      "Step 2: Click that user's avatar to open the profile popover",
+      "Step 3: Verify the status emoji and text 'Shipping features' are visible in the popover",
+      "Step 4: Verify the status is below or beside the display name"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Character counter in composer turns warning color near the 4000 char limit",
+    "steps": [
+      "Step 1: Type 3800 characters in the composer",
+      "Step 2: Verify a character counter is visible (e.g., '3800 / 4000')",
+      "Step 3: Verify the counter text color is warning/amber when above 3500",
+      "Step 4: Type to 4000 characters and verify counter turns danger red (#ef4444)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel sidebar + workspace rail maintain layout on small laptop screens (1280px wide)",
+    "steps": [
+      "Step 1: Set viewport to 1280\u00d7800",
+      "Step 2: Verify all three columns (workspace rail, sidebar, chat main) are visible",
+      "Step 3: Verify no horizontal overflow or cut-off elements",
+      "Step 4: Verify the chat main area has adequate reading width (at least 600px)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Unread badge on workspace icon in rail indicates unread messages in that workspace",
+    "steps": [
+      "Step 1: Be in Workspace A; Workspace B receives a new message",
+      "Step 2: Verify Workspace B's icon in the rail shows a small badge/dot",
+      "Step 3: Switch to Workspace B and open the unread channel",
+      "Step 4: Verify the badge on Workspace B's icon disappears"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "All color changes and transitions are GPU-composited (no layout-triggering animations)",
+    "steps": [
+      "Step 1: Open Chrome DevTools \u2192 Performance tab",
+      "Step 2: Record while sending messages and opening threads",
+      "Step 3: Verify animations use only transform and opacity (not top/left/width/height)",
+      "Step 4: Verify no layout or paint warnings in the performance trace"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Infinite scroll loading indicator appears at the top of the messages list",
+    "steps": [
+      "Step 1: Load a channel with 100+ messages",
+      "Step 2: Scroll to the top quickly",
+      "Step 3: Verify a loading spinner or skeleton rows appear at the top while older messages fetch",
+      "Step 4: Verify the scroll position is preserved after older messages are prepended"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Register form shows password strength indicator",
+    "steps": [
+      "Step 1: Navigate to /register",
+      "Step 2: Type a weak password (e.g., '123')",
+      "Step 3: Verify a strength indicator shows 'Weak' in red",
+      "Step 4: Type a strong password (e.g., 'SecurePass123!')",
+      "Step 5: Verify the indicator shows 'Strong' in green"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "DM list in sidebar shows recipient avatar (24px) beside their name",
+    "steps": [
+      "Step 1: Have 2 active DM conversations",
+      "Step 2: View the DMs section in the sidebar",
+      "Step 3: Verify each DM row shows a 24px circular avatar of the recipient",
+      "Step 4: Verify the avatar is followed by the recipient's display name"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "No-workspace state shows a prompt to create or join a workspace",
+    "steps": [
+      "Step 1: Log in as a user with no workspaces",
+      "Step 2: Verify the UI shows an empty state prompt",
+      "Step 3: Verify buttons for 'Create workspace' and 'Join with invite link' are visible",
+      "Step 4: Verify the page is styled consistently with the dark theme"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Code block in messages has a subtle copy button on hover",
+    "steps": [
+      "Step 1: Send a message with a fenced code block",
+      "Step 2: Hover over the rendered code block",
+      "Step 3: Verify a 'Copy' button appears in the top-right corner of the code block",
+      "Step 4: Click it and verify the code is copied to clipboard",
+      "Step 5: Verify the button shows 'Copied!' feedback"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Channel member is auto-added to #general when joining a workspace",
+    "steps": [
+      "Step 1: User B joins workspace via invite link",
+      "Step 2: GET /api/workspaces/:slug/channels as User B",
+      "Step 3: Verify #general appears in the channel list",
+      "Step 4: Verify User B is in channel_members for #general"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "GET /api/auth/me returns 401 when called without authentication cookies",
+    "steps": [
+      "Step 1: Make a GET request to /api/auth/me without any cookies",
+      "Step 2: Verify response status is 401",
+      "Step 3: Verify response body contains an error message about missing authentication"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Channel message count displayed in channel browser",
+    "steps": [
+      "Step 1: Send 5 messages to #announcements",
+      "Step 2: Open the channel browser as a user not in #announcements",
+      "Step 3: Verify the channel browser row for #announcements shows the member count or message count",
+      "Step 4: Verify the number matches the actual database count"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Workspace invite link is copyable from the invite modal in the UI",
+    "steps": [
+      "Step 1: Log in as workspace owner",
+      "Step 2: Open workspace settings or click Invite People button",
+      "Step 3: Verify an invite link is displayed in the UI",
+      "Step 4: Click the copy button",
+      "Step 5: Verify clipboard contains the full invite URL",
+      "Step 6: Verify the URL format is http://localhost:5173/join/:token or similar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "User display name defaults to username when no display name is set",
+    "steps": [
+      "Step 1: Register a new user with username testuser123 and no display name",
+      "Step 2: Navigate to a channel and send a message",
+      "Step 3: Verify the message shows testuser123 as the sender name",
+      "Step 4: GET /api/auth/me and verify display_name field is null or equals username"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Drizzle ORM query for messages uses indexed columns for performance",
+    "steps": [
+      "Step 1: Inspect the Drizzle schema definition file",
+      "Step 2: Verify messages.channel_id has a database index",
+      "Step 3: Verify messages.created_at has a database index",
+      "Step 4: Verify messages.thread_parent_id has a database index"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "WebSocket room subscription correctly isolates channel messages",
+    "steps": [
+      "Step 1: User A subscribes to #general channel via WebSocket",
+      "Step 2: User B subscribes to #dev channel",
+      "Step 3: User C sends a message to #dev",
+      "Step 4: Verify User B receives the message.new event",
+      "Step 5: Verify User A does NOT receive the message.new event for #dev"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Registering with a username containing special characters is rejected",
+    "steps": [
+      "Step 1: POST /api/auth/register with username containing spaces or special chars like my user!",
+      "Step 2: Verify response is 422 Unprocessable Entity",
+      "Step 3: Verify error message explains username format requirements",
+      "Step 4: Verify no user is created in the database"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "GET /api/workspaces/:slug/channels returns channels sorted alphabetically",
+    "steps": [
+      "Step 1: Create channels: #zebra, #alpha, #middle in a workspace",
+      "Step 2: Join all channels as a user",
+      "Step 3: GET /api/workspaces/:slug/channels",
+      "Step 4: Verify channels appear in order: alpha, middle, zebra"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "DM conversation deduplication: opening DM twice returns same conversation",
+    "steps": [
+      "Step 1: User A opens DM with User B (POST /api/workspaces/:slug/dms)",
+      "Step 2: User A opens DM with User B again",
+      "Step 3: Verify both calls return the same conversation id",
+      "Step 4: Verify only one row exists in direct_message_conversations table"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Message content_rendered field is stored as sanitized HTML",
+    "steps": [
+      "Step 1: Send a message with Markdown including a potential XSS payload: **bold** <script>alert(1)</script>",
+      "Step 2: Verify the message renders bold but does not execute the script",
+      "Step 3: Check database: content_rendered should have <script> tags stripped or escaped",
+      "Step 4: Verify browser does not show any alert dialog"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Logout button in user menu clears session and redirects to login",
+    "steps": [
+      "Step 1: Log in and navigate to a workspace",
+      "Step 2: Click on the user avatar or account menu in the workspace rail",
+      "Step 3: Click Logout",
+      "Step 4: Verify redirect to /login",
+      "Step 5: Verify cookies are cleared (no access_token or refresh_token in browser)",
+      "Step 6: Attempting to navigate to /w/:slug redirects back to /login"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace creation page emoji picker for icon is consistent with dark theme",
+    "steps": [
+      "Step 1: Navigate to workspace creation",
+      "Step 2: Click the emoji icon picker area",
+      "Step 3: Verify the emoji grid appears with a dark background",
+      "Step 4: Verify currently selected emoji has a highlighted state"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel header border-bottom separates it from the message list",
+    "steps": [
+      "Step 1: Open a channel",
+      "Step 2: Inspect the channel header element",
+      "Step 3: Verify a border-bottom of 1px in color #2a2a2a separates the header from messages",
+      "Step 4: Verify no gap or spacing issue at the border line"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Composer toolbar icons have correct size and spacing",
+    "steps": [
+      "Step 1: Open a channel composer",
+      "Step 2: Inspect the toolbar area (bold, code, emoji icons)",
+      "Step 3: Verify icons are 20x20px or similar consistent size",
+      "Step 4: Verify icons have 8px gap between them",
+      "Step 5: Verify icon color is #6b6b6b (muted) and brightens to #e8e8e8 on hover"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace rail add button (+) has circular style matching workspace icons",
+    "steps": [
+      "Step 1: Open the app with at least one workspace",
+      "Step 2: View the bottom of the workspace rail",
+      "Step 3: Verify the Add Workspace (+) button is circular (same shape as workspace avatars)",
+      "Step 4: Verify it uses a dashed border or subdued style to distinguish from active workspaces"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Message composer placeholder text is descriptive and correctly styled",
+    "steps": [
+      "Step 1: Open a channel with an empty composer",
+      "Step 2: Verify placeholder text reads something like Message #channel-name",
+      "Step 3: Verify placeholder color is #6b6b6b",
+      "Step 4: Verify placeholder disappears when user clicks into the composer"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel row in sidebar shows # prefix before channel name",
+    "steps": [
+      "Step 1: Open a workspace with several channels",
+      "Step 2: View the channels section in the sidebar",
+      "Step 3: Verify each channel name is prefixed with # symbol",
+      "Step 4: Verify the # is in muted color and the name is in primary text color"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Message list area is scrollable and does not cause page-level scroll",
+    "steps": [
+      "Step 1: Open a channel with many messages",
+      "Step 2: Scroll within the message list",
+      "Step 3: Verify only the message list area scrolls (not the entire page)",
+      "Step 4: Verify the sidebar and composer remain fixed in position"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Error messages on forms are displayed in red (#ef4444)",
+    "steps": [
+      "Step 1: Submit the login form with invalid credentials",
+      "Step 2: Verify an error message appears below the form or near the relevant field",
+      "Step 3: Verify the error text color is #ef4444",
+      "Step 4: Verify error text is legible (adequate font size, not too small)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Scrollbar in message list and sidebar is styled to match the dark theme",
+    "steps": [
+      "Step 1: Open a channel with many messages and a workspace with many channels",
+      "Step 2: Verify the scrollbar uses a dark/muted style (thin, dark-colored thumb)",
+      "Step 3: Verify no default bright grey OS scrollbar is visible",
+      "Step 4: Verify scrollbar thumb color is approximately #2a2a2a or similar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "User avatar in workspace rail bottom shows current user identity",
+    "steps": [
+      "Step 1: Log in and open a workspace",
+      "Step 2: View the bottom of the workspace rail",
+      "Step 3: Verify the current users avatar (or initials) is shown",
+      "Step 4: Verify clicking it opens a menu with options: Profile, Settings, Logout"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace member count and channel list are visible in workspace header dropdown",
+    "steps": [
+      "Step 1: Click the workspace name in the sidebar header to open the dropdown",
+      "Step 2: Verify a dropdown appears with options like Invite People, Settings, Leave Workspace",
+      "Step 3: Verify the dropdown is styled dark and matches the surface theme",
+      "Step 4: Verify the dropdown closes when clicking outside"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Full 3-column layout is correctly proportioned on 1920px wide screen",
+    "steps": [
+      "Step 1: Set viewport to 1920x1080",
+      "Step 2: Open the app with a workspace and channel",
+      "Step 3: Verify workspace rail is ~64px, sidebar ~240px, and chat main fills remaining width",
+      "Step 4: Verify the chat main column is max ~900px centered or full remaining width"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Thread panel does not obscure the composer when open",
+    "steps": [
+      "Step 1: Open a thread panel in a channel",
+      "Step 2: Verify the message composer is still fully visible and accessible",
+      "Step 3: Verify the thread panel overlays the right portion of the chat main area",
+      "Step 4: Verify typing in the composer (not thread) still works normally"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Register page has a link to login and login page has a link to register",
+    "steps": [
+      "Step 1: Navigate to /register",
+      "Step 2: Verify there is a link or text like Already have an account? Sign in",
+      "Step 3: Navigate to /login",
+      "Step 4: Verify there is a link like Dont have an account? Create one",
+      "Step 5: Verify both links correctly navigate to the other page"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel name in header has # prefix matching sidebar style",
+    "steps": [
+      "Step 1: Navigate to a channel",
+      "Step 2: Inspect the channel header",
+      "Step 3: Verify the channel name is displayed as #channel-name with the # symbol",
+      "Step 4: Verify consistent styling with the sidebar channel list format"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Private channel has a lock icon indicator in the sidebar",
+    "steps": [
+      "Step 1: Create a private channel",
+      "Step 2: View the channel in the sidebar",
+      "Step 3: Verify a lock icon (\ud83d\udd12 or SVG lock) appears before or after the channel name",
+      "Step 4: Verify public channels do not show the lock icon"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "User profile page avatar upload area has a hover state with camera icon",
+    "steps": [
+      "Step 1: Navigate to profile settings",
+      "Step 2: Hover over the avatar image/initials circle",
+      "Step 3: Verify a camera or edit icon overlays the avatar on hover",
+      "Step 4: Verify an Upload photo or Change avatar label appears",
+      "Step 5: Verify the overlay uses a semi-transparent dark background"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Input fields have consistent dark styling with border and focus states",
+    "steps": [
+      "Step 1: Inspect a text input on the login form",
+      "Step 2: Verify background is #1e1e1e (Surface2)",
+      "Step 3: Verify border is 1px solid #2a2a2a",
+      "Step 4: Click the input to focus it",
+      "Step 5: Verify focus ring appears in #ffffff (accent color)",
+      "Step 6: Verify the same styling applies to inputs on register and settings pages"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "New workspace button (+) in rail has a tooltip label on hover",
+    "steps": [
+      "Step 1: Hover over the Add Workspace button in the workspace rail",
+      "Step 2: Verify a tooltip appears with text like Add a workspace",
+      "Step 3: Verify the tooltip uses dark background with light text",
+      "Step 4: Verify tooltip disappears when cursor moves away"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace icons in the rail have tooltips showing workspace name",
+    "steps": [
+      "Step 1: Hover over a workspace icon in the rail",
+      "Step 2: Verify a tooltip appears showing the workspace name",
+      "Step 3: Verify tooltip styling matches the dark theme",
+      "Step 4: Verify the tooltip closes on mouseout"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Skeleton loader rows match the approximate shape of real message rows",
+    "steps": [
+      "Step 1: On slow network, navigate to a channel",
+      "Step 2: Observe skeleton loaders while messages fetch",
+      "Step 3: Verify skeleton rows have a circular placeholder for the avatar",
+      "Step 4: Verify skeleton rows have rectangular placeholders for username and message text",
+      "Step 5: Verify skeleton color is slightly lighter than the dark background (shimmer effect)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel browser search input is styled consistently with dark theme inputs",
+    "steps": [
+      "Step 1: Open the channel browser",
+      "Step 2: Locate the search input for filtering channels",
+      "Step 3: Verify background is #1e1e1e with #2a2a2a border",
+      "Step 4: Verify placeholder text in #6b6b6b",
+      "Step 5: Verify a search icon is visible inside or adjacent to the input"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Responsive: at 768px the 3-column layout collapses to mobile view",
+    "steps": [
+      "Step 1: Set viewport to 768px wide",
+      "Step 2: Verify workspace rail and channel sidebar are hidden",
+      "Step 3: Verify only the chat main area is visible",
+      "Step 4: Verify a navigation toggle (hamburger) is visible in the header"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Mobile sidebar drawer overlays the chat area without pushing it",
+    "steps": [
+      "Step 1: Set viewport to 375px",
+      "Step 2: Tap the hamburger to open the sidebar drawer",
+      "Step 3: Verify the drawer slides over the chat (overlay mode, not push mode)",
+      "Step 4: Verify a semi-transparent backdrop appears behind the drawer",
+      "Step 5: Tap the backdrop to close the drawer"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Status indicator text below DM recipient name is styled in muted color",
+    "steps": [
+      "Step 1: User B has status set to Active now",
+      "Step 2: Open DM with User B",
+      "Step 3: Verify the header shows Active now or similar in #6b6b6b below the name",
+      "Step 4: Verify the text is smaller than the name (12px or 13px)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Compose box expands vertically with multi-line content up to a max height",
+    "steps": [
+      "Step 1: Click the composer and type a single line",
+      "Step 2: Verify the composer is approximately 44px tall",
+      "Step 3: Press Shift+Enter to add more lines until the composer exceeds 5 lines",
+      "Step 4: Verify the composer expands up to a max height (e.g., 200px) then becomes scrollable",
+      "Step 5: Verify the message list above does not jump when the composer expands"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Unread count badge on workspace icon is capped at 9+ visually",
+    "steps": [
+      "Step 1: Generate 15 unread messages in a workspace",
+      "Step 2: View the workspace icon badge in the rail",
+      "Step 3: Verify the badge shows 9+ rather than the exact number 15",
+      "Step 4: Verify the badge is readable and does not overflow the icon"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Profile settings page avatar is displayed at 80px or larger",
+    "steps": [
+      "Step 1: Navigate to profile settings",
+      "Step 2: Inspect the avatar element on the settings page",
+      "Step 3: Verify the avatar is at least 80x80px",
+      "Step 4: Verify the avatar is circular with border-radius: 50%"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel join button in channel browser has loading state on click",
+    "steps": [
+      "Step 1: Open channel browser on slow network",
+      "Step 2: Click Join on a public channel",
+      "Step 3: Verify the Join button shows a spinner or loading text",
+      "Step 4: Verify the button is disabled while the join request is in flight",
+      "Step 5: After joining, the button changes to Joined or disappears"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Message list does not show a horizontal scrollbar",
+    "steps": [
+      "Step 1: Send a very long message (200+ characters on one line)",
+      "Step 2: View the message in the channel",
+      "Step 3: Verify the message wraps to the next line and does not cause horizontal scroll",
+      "Step 4: Verify overflow-x is hidden on the message list container"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "App title in the browser tab reads Colloquium Chat",
+    "steps": [
+      "Step 1: Open the app",
+      "Step 2: Verify the browser tab title is Colloquium Chat",
+      "Step 3: Navigate to a channel",
+      "Step 4: Verify title becomes #channel-name - Colloquium Chat or similar"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Settings sidebar navigation items have active state highlighting",
+    "steps": [
+      "Step 1: Navigate to profile settings",
+      "Step 2: Verify the Profile nav item is highlighted as active",
+      "Step 3: Click Password nav item",
+      "Step 4: Verify Password is now highlighted and Profile is not",
+      "Step 5: Verify active item uses accent left-border or background highlight"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Confirmation dialogs for destructive actions use modal with correct dark styling",
+    "steps": [
+      "Step 1: Click Delete Channel or Leave Workspace",
+      "Step 2: Verify a confirmation modal/dialog appears",
+      "Step 3: Verify modal background is #161616 or #1e1e1e",
+      "Step 4: Verify there is a semi-transparent dark backdrop behind the modal",
+      "Step 5: Verify Confirm button is styled in danger red (#ef4444)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Workspace settings page has a correctly styled header with workspace name",
+    "steps": [
+      "Step 1: Navigate to workspace settings",
+      "Step 2: Verify the page header shows the workspace name prominently",
+      "Step 3: Verify font-weight is bold and font-size is at least 20px",
+      "Step 4: Verify the header background matches the dark theme"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Member list rows show avatar, name, and role in a consistent grid alignment",
+    "steps": [
+      "Step 1: Open the workspace members list",
+      "Step 2: Verify all rows are aligned: avatar left, name center, role right",
+      "Step 3: Verify vertical alignment is centered for each row element",
+      "Step 4: Verify row height is consistent across all member entries"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "DM open button (+) in sidebar shows a tooltip on hover",
+    "steps": [
+      "Step 1: Hover over the + button next to DIRECT MESSAGES in the sidebar",
+      "Step 2: Verify a tooltip appears with text like Open a direct message",
+      "Step 3: Verify tooltip styling matches the dark theme"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Thread reply composer is visually distinct from the main channel composer",
+    "steps": [
+      "Step 1: Open a thread panel",
+      "Step 2: View the thread reply composer at the bottom of the panel",
+      "Step 3: Verify it has a narrower width fitting the thread panel",
+      "Step 4: Verify the placeholder says something like Reply in thread",
+      "Step 5: Verify styling is otherwise consistent with the main composer dark theme"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Unread indicator dot is not shown on the currently active channel",
+    "steps": [
+      "Step 1: Make a channel have unread messages",
+      "Step 2: Click that channel to open it",
+      "Step 3: Verify the unread dot immediately disappears from the channel in the sidebar",
+      "Step 4: Verify the channel name returns to normal (non-bold) weight"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Page loads without flash of white background (FOUC prevention)",
+    "steps": [
+      "Step 1: Clear browser cache",
+      "Step 2: Navigate to the app on /login",
+      "Step 3: Verify no white flash occurs before the dark theme is applied",
+      "Step 4: Verify the HTML root element has a dark background-color set in the CSS or index.html"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Prism.js syntax highlight theme matches the dark color palette",
+    "steps": [
+      "Step 1: Send a code block with JavaScript code",
+      "Step 2: Inspect the code block element and its color theme",
+      "Step 3: Verify the code block background is dark (#0d0d0d or similar)",
+      "Step 4: Verify keyword tokens are highlighted but not in garish neon colors",
+      "Step 5: Verify the overall code block aesthetic is consistent with Linear/Notion minimal dark"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Channel list in sidebar truncates long channel names with ellipsis",
+    "steps": [
+      "Step 1: Create a channel with a very long name like this-is-a-very-long-channel-name",
+      "Step 2: View it in the sidebar",
+      "Step 3: Verify the channel name is truncated with ellipsis (...) if it exceeds the sidebar width",
+      "Step 4: Verify the full name is visible in a tooltip on hover"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Messages by the same author in quick succession are visually grouped",
+    "steps": [
+      "Step 1: Send 3 messages in a row from the same user within 2 minutes",
+      "Step 2: Verify the second and third messages do not repeat the avatar and username",
+      "Step 3: Verify they are visually grouped under the first message",
+      "Step 4: Verify the grouping uses reduced vertical spacing between grouped messages"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "Join workspace page (/join/:token) is styled consistently with the auth pages",
+    "steps": [
+      "Step 1: Navigate to a valid invite URL /join/:token while logged out",
+      "Step 2: Verify a page appears showing workspace name and a Join or Sign in to join button",
+      "Step 3: Verify the page background is #0d0d0d",
+      "Step 4: Verify the card/content area matches the login/register card style"
+    ],
+    "passes": false
+  },
+  {
+    "category": "style",
+    "description": "App favicon is present and distinct from default browser icon",
+    "steps": [
+      "Step 1: Open the app in a browser",
+      "Step 2: Verify the browser tab shows a favicon (not the default browser icon)",
+      "Step 3: Verify the favicon is visible on both light and dark OS themes",
+      "Step 4: Verify the favicon file exists in the public directory"
+    ],
+    "passes": false
+  }
+]

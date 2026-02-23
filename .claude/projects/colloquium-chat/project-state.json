@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "slug": "colloquium-chat",
+  "name": "Colloquium Chat",
+  "appDir": "apps/colloquium-chat",
+  "apiDir": "apps/colloquium-chat-api",
+  "packages": ["packages/colloquium-chat-types"],
+  "specFile": ".claude/projects/colloquium-chat/app_spec.txt",
+  "featureListFile": ".claude/projects/colloquium-chat/feature_list.json",
+  "progressFile": ".claude/projects/colloquium-chat/claude-progress.txt",
+  "totalTests": 200,
+  "passingTests": 0,
+  "currentTestIndex": 0,
+  "phase": "develop",
+  "lastUpdated": "2026-02-23T00:00:00.000Z",
+  "sessionCount": 1
+}

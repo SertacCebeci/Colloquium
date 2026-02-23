@@ -1,0 +1,407 @@
+<project_specification>
+  <project_name>Colloquium Chat</project_name>
+
+  <overview>
+    Colloquium Chat is a multi-tenant, real-time team messaging web application modelled after Slack.
+    Any user can register, create or join workspaces, and communicate through public/private channels
+    and direct messages. The application targets the general public as a SaaS product and prioritises
+    a minimal, monochrome dark aesthetic inspired by Linear and Notion.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React 18 + Vite 5</framework>
+      <styling>Tailwind CSS 4 (utility-first, dark-mode via class strategy)</styling>
+      <state_management>Zustand 5 (feature-sliced stores)</state_management>
+      <routing>React Router v7 (client-side SPA routing)</routing>
+      <port>Only launch on port 5173</port>
+    </frontend>
+    <backend>
+      <runtime>Hono (Node adapter, TypeScript)</runtime>
+      <database>SQLite (via better-sqlite3 / Drizzle ORM)</database>
+      <port>5001</port>
+    </backend>
+    <auth>JWT (access token + refresh token, stored in httpOnly cookies via Hono)</auth>
+    <realtime>WebSockets (via ws library on the Hono Node server; client uses native WebSocket API)</realtime>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      - Node.js >= 20 and pnpm >= 9 must be installed
+      - apps/colloquium-chat-api/.env must contain: JWT_SECRET, JWT_REFRESH_SECRET, DATABASE_PATH (defaults to ./db/chat.db), PORT=5001
+      - apps/colloquium-chat/.env must contain: VITE_API_BASE_URL=http://localhost:5001, VITE_WS_URL=ws://localhost:5001
+      - No external cloud services required; SQLite is a local file
+      - Run `pnpm install` from repo root before first start
+    </environment_setup>
+  </prerequisites>
+
+  <core_features>
+    <user_authentication>
+      - User registration: email + username + password (bcrypt hashed)
+      - User login: returns JWT access token (15 min) + refresh token (7 days) in httpOnly cookies
+      - Token refresh endpoint: transparently renews access tokens
+      - Logout: clears both cookies and invalidates refresh token in DB
+      - Auth middleware on all protected API routes
+      - Frontend route guards: unauthenticated users redirected to /login
+    </user_authentication>
+
+    <workspaces>
+      - Create workspace: name + optional icon (emoji or initial letter avatar)
+      - Join workspace via invite link (token-based, expires in 24h)
+      - Workspace switcher: icon rail on far-left column
+      - Each workspace has a unique slug used in URLs (/w/:slug)
+      - Workspace settings page (name, icon, danger zone: leave/delete)
+      - Members list with roles: owner, admin, member
+    </workspaces>
+
+    <channels>
+      - Default channel #general auto-created with new workspace
+      - Create channel: name (kebab-case enforced), description, public/private toggle
+      - Channel browser: list all public channels the user is not yet in, with join button
+      - Channel sidebar lists all joined channels sorted alphabetically
+      - Archive/delete channel (owner/admin only)
+      - Channel header: name, description, member count
+      - Unread indicator: bold name + dot badge in sidebar
+    </channels>
+
+    <direct_messages>
+      - Open a DM with any workspace member from the member directory
+      - DM sidebar section below channels
+      - Unread indicator same as channels
+      - DM conversation header shows recipient name, avatar, online status
+    </direct_messages>
+
+    <real_time_messaging>
+      - Messages sent via REST POST (for durability) and broadcast via WebSocket
+      - WebSocket events: message.new, message.update, message.delete, user.typing, user.presence
+      - Typing indicator: shown when a member is typing, auto-clears after 3 s
+      - Optimistic UI: message appears immediately in sender's UI, confirmed on WS ack
+      - Message list: paginated (50 per page), infinite scroll upward to load history
+      - Timestamps: relative (e.g., "2 min ago") for recent, absolute for older
+      - Day separator dividers between messages from different calendar days
+    </real_time_messaging>
+
+    <message_composer>
+      - Rich text composer using a contenteditable div
+      - Markdown shortcuts: **bold**, _italic_, `code`, ```code block```
+      - Rendered preview toggle (Markdown rendered inline on send)
+      - Code blocks: syntax highlighted with Prism.js (auto-detect language)
+      - Send on Enter (Shift+Enter for newline)
+      - Character limit: 4000 chars, live counter near limit
+      - Emoji picker (subset: most-used 100 emojis)
+    </message_composer>
+
+    <thread_replies>
+      - Click "Reply in thread" on any message to open a right-panel thread sidebar
+      - Thread shows parent message + all replies
+      - Thread reply count badge on parent message
+      - Threads do not appear in main channel flow (only reply count indicator)
+    </thread_replies>
+
+    <user_profile>
+      - Edit display name and status text (emoji + short text)
+      - Upload avatar image (stored as base64 in SQLite for simplicity)
+      - Profile popover: click any username/avatar to see mini-profile
+      - Settings page: change password, display name, avatar
+    </user_profile>
+
+    <presence_and_notifications>
+      - Online/offline/away presence tracked via WebSocket connection lifecycle
+      - Green dot indicator on user avatars when online
+      - In-app notification badge on workspace icon when there are unread messages
+      - @mention highlights: message text containing @username highlighted in accent color
+      - Browser tab title updates with unread count: "(3) Colloquium Chat"
+    </presence_and_notifications>
+  </core_features>
+
+  <database_schema>
+    <tables>
+      users:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        email TEXT UNIQUE NOT NULL
+        username TEXT UNIQUE NOT NULL
+        password_hash TEXT NOT NULL
+        display_name TEXT
+        avatar TEXT (base64 or null)
+        status_emoji TEXT
+        status_text TEXT
+        created_at INTEGER (Unix ms)
+        updated_at INTEGER
+
+      refresh_tokens:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        user_id INTEGER REFERENCES users(id)
+        token_hash TEXT UNIQUE NOT NULL
+        expires_at INTEGER NOT NULL
+        created_at INTEGER
+
+      workspaces:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        name TEXT NOT NULL
+        slug TEXT UNIQUE NOT NULL
+        icon TEXT (emoji or null)
+        owner_id INTEGER REFERENCES users(id)
+        created_at INTEGER
+
+      workspace_members:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        workspace_id INTEGER REFERENCES workspaces(id)
+        user_id INTEGER REFERENCES users(id)
+        role TEXT NOT NULL DEFAULT 'member' (owner|admin|member)
+        joined_at INTEGER
+        UNIQUE(workspace_id, user_id)
+
+      invite_links:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        workspace_id INTEGER REFERENCES workspaces(id)
+        token TEXT UNIQUE NOT NULL
+        created_by INTEGER REFERENCES users(id)
+        expires_at INTEGER NOT NULL
+        used_count INTEGER DEFAULT 0
+        max_uses INTEGER DEFAULT 100
+
+      channels:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        workspace_id INTEGER REFERENCES workspaces(id)
+        name TEXT NOT NULL (kebab-case)
+        description TEXT
+        is_private INTEGER DEFAULT 0 (boolean)
+        is_archived INTEGER DEFAULT 0
+        created_by INTEGER REFERENCES users(id)
+        created_at INTEGER
+        UNIQUE(workspace_id, name)
+
+      channel_members:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        channel_id INTEGER REFERENCES channels(id)
+        user_id INTEGER REFERENCES users(id)
+        last_read_at INTEGER
+        UNIQUE(channel_id, user_id)
+
+      direct_message_conversations:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        workspace_id INTEGER REFERENCES workspaces(id)
+        user_a INTEGER REFERENCES users(id)
+        user_b INTEGER REFERENCES users(id)
+        UNIQUE(workspace_id, user_a, user_b)
+
+      messages:
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+        workspace_id INTEGER REFERENCES workspaces(id)
+        channel_id INTEGER REFERENCES channels(id) (null for DMs)
+        dm_conversation_id INTEGER REFERENCES direct_message_conversations(id) (null for channels)
+        thread_parent_id INTEGER REFERENCES messages(id) (null = top-level)
+        author_id INTEGER REFERENCES users(id)
+        content TEXT NOT NULL (raw Markdown)
+        content_rendered TEXT (HTML, cached render)
+        edited_at INTEGER
+        deleted_at INTEGER
+        created_at INTEGER NOT NULL
+    </tables>
+  </database_schema>
+
+  <api_endpoints_summary>
+    Auth:
+      POST /api/auth/register       — Create account (email, username, password)
+      POST /api/auth/login          — Login, set cookies
+      POST /api/auth/refresh        — Renew access token
+      POST /api/auth/logout         — Clear cookies, invalidate refresh token
+      GET  /api/auth/me             — Return current user
+
+    Users:
+      GET  /api/users/:id           — Public profile
+      PATCH /api/users/me           — Update display name, status, avatar
+      PATCH /api/users/me/password  — Change password
+
+    Workspaces:
+      GET  /api/workspaces          — List workspaces the current user belongs to
+      POST /api/workspaces          — Create workspace
+      GET  /api/workspaces/:slug    — Workspace metadata + member list
+      PATCH /api/workspaces/:slug   — Update name/icon (admin+)
+      DELETE /api/workspaces/:slug  — Delete workspace (owner only)
+      GET  /api/workspaces/:slug/invite  — Generate invite link
+      POST /api/workspaces/join/:token   — Join via invite link
+
+    Channels:
+      GET  /api/workspaces/:slug/channels       — List all channels user is in
+      GET  /api/workspaces/:slug/channels/browse — List all public channels
+      POST /api/workspaces/:slug/channels        — Create channel
+      GET  /api/workspaces/:slug/channels/:name  — Channel metadata
+      POST /api/workspaces/:slug/channels/:name/join  — Join channel
+      PATCH /api/workspaces/:slug/channels/:name      — Update description (admin+)
+      DELETE /api/workspaces/:slug/channels/:name     — Archive/delete (admin+)
+
+    Direct Messages:
+      GET  /api/workspaces/:slug/dms            — List DM conversations
+      POST /api/workspaces/:slug/dms            — Open/get DM with user
+      GET  /api/workspaces/:slug/dms/:id        — DM conversation metadata
+
+    Messages:
+      GET  /api/messages?channelId=&before=&limit=50  — Paginated history
+      GET  /api/messages?dmId=&before=&limit=50       — DM paginated history
+      POST /api/messages                              — Send message
+      PATCH /api/messages/:id                         — Edit message (author only)
+      DELETE /api/messages/:id                        — Soft-delete (author or admin)
+      GET  /api/messages/:id/thread                   — Thread replies
+
+    WebSocket:
+      WS /ws?token=:accessToken     — Authenticated WS connection
+      Events: message.new, message.update, message.delete,
+              user.typing, user.presence, channel.updated
+  </api_endpoints_summary>
+
+  <ui_layout>
+    <main_structure>
+      Full-height viewport (100dvh), no page scrolling.
+      Three fixed columns:
+        1. Workspace rail (left, ~64px wide) — scrollable list of workspace icons + "Add workspace" button
+        2. Channel sidebar (left-of-main, ~240px wide) — workspace name header, channels section, DMs section, member list toggle
+        3. Chat main (flex-1) — channel header, messages scrollable list, composer at bottom
+      Thread panel: overlay on the right side of chat main (320px, slides in)
+    </main_structure>
+    <workspace_rail>
+      Icon buttons for each workspace (circular avatars / emoji icons)
+      Active workspace: ring highlight
+      Bottom: "+ New Workspace" button, user avatar + settings gear
+    </workspace_rail>
+    <channel_sidebar>
+      Workspace name (bold, dropdown for settings/invite)
+      Channels section header with "+" add button (collapsible)
+      Sorted alphabetical list of joined channels — unread bold + dot
+      DMs section header with "+" button (collapsible)
+      DM list: recipient avatar + name, unread indicator
+    </channel_sidebar>
+    <chat_main>
+      Header bar: # channel-name + description (truncated), member count chip, search icon
+      Messages list: flex column, newest at bottom, scrollable, infinite scroll upward
+      Day dividers between date groups
+      Message row: avatar + username + timestamp + content (Markdown rendered)
+      Hover actions on message: reply, edit (own), delete (own/admin), emoji react
+      Composer: contenteditable div with toolbar icons (bold, code, emoji), send button
+    </chat_main>
+    <auth_pages>
+      Centered card on dark background
+      Login page: email + password + "Remember me", link to register
+      Register page: email + username + password + confirm password
+    </auth_pages>
+    <settings_pages>
+      Sidebar navigation (Profile, Password, Workspace)
+      Right content panel for each settings section
+    </settings_pages>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      Background:  #0d0d0d (near black, main bg)
+      Surface:     #161616 (sidebar, cards)
+      Surface2:    #1e1e1e (hover states, inputs)
+      Border:      #2a2a2a (subtle separators)
+      Text:        #e8e8e8 (primary text)
+      Text-muted:  #6b6b6b (timestamps, placeholders)
+      Accent:      #ffffff (active states, focus rings, links — pure white pop)
+      Unread:      #5865f2 (indigo dot — the one colour pop)
+      Danger:      #ef4444 (delete actions)
+    </color_palette>
+    <typography>
+      Font: Inter (variable weight, system-ui fallback)
+      Body: 14px / 1.5 line-height
+      Headings: 16px semi-bold (channel name), 13px medium (sidebar labels)
+      Code: JetBrains Mono (Prism code blocks), 13px
+    </typography>
+    <components>
+      Avatar: circular, 32px default, 24px in sidebar DMs, 40px in profile; fallback = initials on Surface2 bg
+      Channel row: 32px height, left-pad 12px, text-sm, hover bg Surface2, active bg Surface2 + accent left border
+      Message row: 12px vertical padding, avatar 36px, text-sm content
+      Composer box: rounded-lg border border-Border bg-Surface, min-height 44px, padding 12px
+      Badge / unread dot: 8px circle bg-Unread, positioned top-right of channel name
+      Button variants: primary (white bg black text), ghost (transparent hover Surface2), danger (red)
+    </components>
+    <animations>
+      Sidebar collapse: 150ms ease
+      Message appear: fade-in 120ms ease-out (translate-y -4px → 0)
+      Thread panel slide: 200ms ease-out
+      Typing indicator: bouncing dot animation 800ms loop
+      Transitions: all color/bg transitions 100ms ease
+    </animations>
+  </design_system>
+
+  <key_interactions>
+    1. Register + First Workspace Setup:
+       a. User opens /register, fills email, username, password
+       b. On submit, POST /api/auth/register → auto-login → redirect to /w/new
+       c. User names workspace, picks emoji icon → POST /api/workspaces
+       d. Redirected to /w/:slug — #general auto-opened
+
+    2. Real-time Messaging:
+       a. User types in composer, typing event sent over WS every keystroke (throttled 500ms)
+       b. Press Enter → POST /api/messages (optimistic add to local store)
+       c. Server broadcasts message.new to all WS subscribers in channel
+       d. All other clients receive WS event and append message to their list
+       e. Sender's optimistic message confirmed (or error rolled back)
+
+    3. Open + Use Thread:
+       a. Hover message → click Reply icon
+       b. Thread panel slides in from right showing parent message
+       c. User types reply in thread composer → POST /api/messages (thread_parent_id set)
+       d. Reply appears in thread; parent message shows updated reply count
+
+    4. Join Workspace via Invite:
+       a. Workspace admin clicks "Invite" → GET /api/workspaces/:slug/invite → copy link
+       b. Invited user opens link → POST /api/workspaces/join/:token
+       c. Added as member, redirected to workspace
+  </key_interactions>
+
+  <implementation_steps>
+    1. Monorepo scaffold — create apps/colloquium-chat and apps/colloquium-chat-api with config files and verify Turborepo build
+    2. Database + Drizzle ORM setup — define schema, run migrations, seed #general channel logic
+    3. Auth API (register, login, refresh, logout, /me) + JWT middleware
+    4. WebSocket server — authenticated connection handler, room subscriptions (channel/DM), event types
+    5. Workspaces API — CRUD + invite link flow + workspace_members
+    6. Channels API — CRUD + join/browse, channel_members
+    7. Messages API — paginated history, POST/PATCH/DELETE, thread support
+    8. Direct Messages API — conversation open/list, message routing
+    9. Frontend auth flow — login/register pages, auth store, route guards
+    10. Frontend workspace + channel scaffold — layout shell (3 columns), workspace rail, channel sidebar
+    11. Chat view — messages list with infinite scroll, day dividers, Markdown rendering (Prism)
+    12. Real-time integration — WS client, typing indicators, presence dots
+    13. Composer — contenteditable rich input, keyboard shortcuts, emoji picker
+    14. Thread panel — slide-in UI, thread reply flow
+    15. User profile + settings pages
+    16. Presence + in-app notifications (unread counts, @mention highlights, tab title)
+    17. Responsive layout — mobile sidebar drawer, touch-friendly composer
+    18. Design polish — animations, transitions, empty states, skeleton loaders
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - Users can register, log in, and maintain session across page refresh
+      - Multiple workspaces can be created and switched without losing state
+      - Public channels can be browsed and joined; private channels require invitation
+      - Messages appear in real time for all connected users in a channel (under 200ms locally)
+      - Thread replies correctly nest without appearing in main channel flow
+      - Unread counts reset when a channel is opened
+      - Invite links expire after 24h or 100 uses
+    </functionality>
+    <user_experience>
+      - App loads to correct workspace/channel without flash of wrong route
+      - Typing indicator appears within 1s of the other user typing
+      - Infinite scroll loads history without visible jump or layout shift
+      - Markdown renders on send, not in the editor
+      - Mobile layout fully usable with sidebar accessible via hamburger drawer
+    </user_experience>
+    <technical_quality>
+      - All API routes return consistent JSON error shapes
+      - WebSocket reconnects automatically on disconnect (exponential backoff)
+      - JWT refresh is transparent to the user (silent token renewal)
+      - SQLite WAL mode enabled for concurrent read performance
+      - TypeScript strict mode, zero `any` without justification comment
+    </technical_quality>
+    <design_polish>
+      - Dark monochrome palette applied consistently — no white backgrounds bleed through
+      - Animations run at 60fps (no layout-triggering properties animated)
+      - Active channel/DM highlighted with left accent border
+      - Avatars always visible; fallback initials render when no image
+      - Unread dot uses the single accent color (indigo #5865f2) consistently
+    </design_polish>
+  </success_criteria>
+</project_specification>

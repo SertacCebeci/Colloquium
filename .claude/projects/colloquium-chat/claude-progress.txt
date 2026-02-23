@@ -1,0 +1,80 @@
+================================================================================
+CLAUDE SESSION PROGRESS - Session 1 (Bootstrap)
+================================================================================
+
+Date: 2026-02-23
+Agent: BOOTSTRAP (Session 1 — project initialization)
+
+================================================================================
+COMPLETED TASKS
+================================================================================
+
+[x] Ran Q&A phase — gathered requirements across 5 blocks:
+    - Identity: colloquium-chat, general public SaaS
+    - Stack: React+Vite / Tailwind / Zustand / Hono+SQLite / JWT / WebSockets
+    - Features: 5 MVP + 3 nice-to-have
+    - Design: 3-column dark layout, Linear/Notion minimal aesthetic
+    - Constraints: ports 5173/5001, .env per app
+
+[x] Generated app_spec.txt — full XML specification
+    - Complete database schema (12 tables)
+    - Full API endpoint map (~35 endpoints + WebSocket)
+    - Design system (color palette, typography, components, animations)
+    - 4 key interaction flows
+    - 18 implementation steps
+
+[x] Generated feature_list.json — 200 test cases (all passes: false)
+    - 100 functional tests (auth, workspaces, channels, DMs, real-time, threads, profile, presence)
+    - 100 style tests (colors, typography, layout, animations, responsive, components)
+
+[x] Scaffolded monorepo structure (see PROJECT STRUCTURE below)
+
+================================================================================
+PROJECT STRUCTURE
+================================================================================
+
+apps/colloquium-chat/               ← React + Vite frontend (port 5173)
+  package.json                      ← @colloquium/colloquium-chat
+  vite.config.ts                    ← strictPort: 5173
+  tsconfig.json                     ← extends @colloquium/tsconfig/react
+  index.html                        ← dark bg set in style attr (no FOUC)
+  src/
+    main.tsx                        ← ReactDOM.createRoot + BrowserRouter
+    App.tsx                         ← Placeholder routes (login, register, /w/*)
+    index.css                       ← Tailwind @import + CSS custom properties
+
+apps/colloquium-chat-api/           ← Hono backend (port 5001)
+  package.json                      ← @colloquium/colloquium-chat-api
+  tsconfig.json                     ← extends @colloquium/tsconfig/node
+  .env.example                      ← JWT_SECRET, DATABASE_PATH, PORT=5001
+  src/
+    index.ts                        ← Hono server, CORS, /api/health endpoint
+
+packages/colloquium-chat-types/     ← Shared TS types (no runtime deps)
+  package.json                      ← @colloquium/colloquium-chat-types
+  tsconfig.json                     ← extends @colloquium/tsconfig/base
+  src/
+    index.ts                        ← ApiUser, ApiWorkspace, ApiChannel, ApiMessage,
+                                       WebSocketEvent types
+
+Turborepo typecheck: 4/4 tasks passing ✅
+
+.claude/projects/colloquium-chat/
+  project-state.json                ← live state tracking
+  app_spec.txt                      ← full XML specification
+  feature_list.json                 ← 200 test cases (0 passing)
+  claude-progress.txt               ← this file
+
+================================================================================
+NEXT SESSION
+================================================================================
+
+Run /colloquium:project and choose "continue" → colloquium-chat
+Start servers with: pnpm turbo dev
+Pick first failing test from feature_list.json (index 0):
+  "Backend server starts and health check endpoint responds with 200 OK"
+
+Session 2 should begin with:
+  1. Database + Drizzle ORM setup (schema, migrations)
+  2. Auth API (register, login, refresh, logout, /me)
+  3. WebSocket server skeleton
