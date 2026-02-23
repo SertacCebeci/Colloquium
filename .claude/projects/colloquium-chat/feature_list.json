@@ -173,7 +173,7 @@
       "Step 4: Verify User B is added to workspace_members with role 'member'",
       "Step 5: Verify User B's workspace list includes the joined workspace"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

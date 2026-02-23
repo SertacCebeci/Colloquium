@@ -241,3 +241,22 @@ NEXT SESSION
 Run /colloquium:project and choose "continue" → colloquium-chat
 Start servers with: pnpm turbo dev
 Pick test #15 from feature_list.json (index 14)
+
+[x] Test #15: Second user can join workspace via invite link → PASSING
+    - Added POST /api/workspaces/join/:token to routes/workspaces.ts
+      (looks up invite by token, 404 if missing, 410 if expired, 409 if already member,
+       inserts into workspace_members with role 'member', returns workspace)
+    - 7 new tests in workspaces.test.ts: join success, DB member role, workspace list,
+      404 bad token, 409 already member, 401 unauth, 410 expired
+    - Full suite: 43/43 tests passing across 7 test files — zero regressions
+    - Browser verified: all 5 steps (token generation → User B register → join →
+      DB role='member' ✅ → workspace in User B's list ✅)
+    - Commit: feat(colloquium-chat): implement POST /api/workspaces/join/:token — test #15 passing
+
+================================================================================
+NEXT SESSION
+================================================================================
+
+Run /colloquium:project and choose "continue" → colloquium-chat
+Start servers with: pnpm turbo dev
+Pick test #16 from feature_list.json (index 15)

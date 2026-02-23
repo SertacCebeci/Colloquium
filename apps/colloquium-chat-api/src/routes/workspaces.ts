@@ -168,5 +168,51 @@ export function workspaceRoutes(db: AppDb) {
     return c.json({ channels: rows });
   });
 
+  router.post("/join/:token", async (c) => {
+    const userId = c.get("userId");
+    const token = c.req.param("token");
+
+    const invite = db
+      .select()
+      .from(workspaceInvites)
+      .where(eq(workspaceInvites.token, token))
+      .get();
+
+    if (!invite) {
+      return c.json({ error: "Invite not found" }, 404);
+    }
+
+    if (invite.expiresAt < Date.now()) {
+      return c.json({ error: "Invite has expired" }, 410);
+    }
+
+    const existing = db
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, invite.workspaceId),
+          eq(workspaceMembers.userId, userId)
+        )
+      )
+      .get();
+
+    if (existing) {
+      return c.json({ error: "Already a member" }, 409);
+    }
+
+    db.insert(workspaceMembers)
+      .values({ workspaceId: invite.workspaceId, userId, role: "member", joinedAt: Date.now() })
+      .run();
+
+    const workspace = db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, invite.workspaceId))
+      .get();
+
+    return c.json({ workspace });
+  });
+
   return router;
 }

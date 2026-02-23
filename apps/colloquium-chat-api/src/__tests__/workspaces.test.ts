@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createDb } from "../db/index.js";
 import { createApp } from "../app.js";
-import { workspaceInvites, workspaces } from "../db/schema.js";
+import { workspaceInvites, workspaces, workspaceMembers } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 
 // Helper: register + login, return cookie header string
@@ -293,5 +293,146 @@ describe("GET /api/workspaces/:slug/invite", () => {
       headers: { cookie: cookieB },
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/workspaces/join/:token", () => {
+  let app: ReturnType<typeof createApp>;
+  let db: ReturnType<typeof createDb>;
+  let cookieOwner: string;
+  let token: string;
+
+  beforeEach(async () => {
+    db = createDb(":memory:");
+    app = createApp(db);
+    cookieOwner = await loginUser(app, "owner@example.com", "Pass123!");
+
+    // Owner creates workspace
+    await app.request("/api/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: cookieOwner },
+      body: JSON.stringify({ name: "Join Test Space", icon: "🔗" }),
+    });
+
+    // Owner generates invite token
+    const inviteRes = await app.request("/api/workspaces/join-test-space/invite", {
+      headers: { cookie: cookieOwner },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    token = ((await inviteRes.json()) as any).token;
+  });
+
+  it("adds User B to the workspace as 'member' and returns 200", async () => {
+    const cookieB = await loginUser(app, "userb@example.com", "Pass123!");
+
+    const res = await app.request(`/api/workspaces/join/${token}`, {
+      method: "POST",
+      headers: { cookie: cookieB },
+    });
+
+    expect(res.status).toBe(200);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
+    expect(body.workspace).toBeDefined();
+    expect(body.workspace.slug).toBe("join-test-space");
+  });
+
+  it("User B appears in workspace_members with role 'member'", async () => {
+    const cookieB = await loginUser(app, "userb2@example.com", "Pass123!");
+
+    await app.request(`/api/workspaces/join/${token}`, {
+      method: "POST",
+      headers: { cookie: cookieB },
+    });
+
+    const workspace = db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.slug, "join-test-space"))
+      .get();
+
+    // Get userId for userb2 from DB
+    const members = db
+      .select()
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspace!.id))
+      .all();
+
+    const newMember = members.find((m) => m.role === "member");
+    expect(newMember).toBeDefined();
+    expect(newMember!.role).toBe("member");
+  });
+
+  it("User B's workspace list includes the joined workspace", async () => {
+    const cookieB = await loginUser(app, "userb3@example.com", "Pass123!");
+
+    await app.request(`/api/workspaces/join/${token}`, {
+      method: "POST",
+      headers: { cookie: cookieB },
+    });
+
+    const listRes = await app.request("/api/workspaces", {
+      headers: { cookie: cookieB },
+    });
+
+    expect(listRes.status).toBe(200);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await listRes.json()) as any;
+    const joined = body.workspaces.find((w: { slug: string }) => w.slug === "join-test-space");
+    expect(joined).toBeDefined();
+  });
+
+  it("returns 404 for a non-existent token", async () => {
+    const cookieB = await loginUser(app, "userb4@example.com", "Pass123!");
+
+    const res = await app.request("/api/workspaces/join/invalidtoken123", {
+      method: "POST",
+      headers: { cookie: cookieB },
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 409 when user is already a member", async () => {
+    const cookieB = await loginUser(app, "userb5@example.com", "Pass123!");
+
+    // Join once
+    await app.request(`/api/workspaces/join/${token}`, {
+      method: "POST",
+      headers: { cookie: cookieB },
+    });
+
+    // Join again — should conflict
+    const res = await app.request(`/api/workspaces/join/${token}`, {
+      method: "POST",
+      headers: { cookie: cookieB },
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    const res = await app.request(`/api/workspaces/join/${token}`, {
+      method: "POST",
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 410 for an expired invite token", async () => {
+    // Manually expire the token in the DB
+    db.update(workspaceInvites)
+      .set({ expiresAt: Date.now() - 1000 })
+      .where(eq(workspaceInvites.token, token))
+      .run();
+
+    const cookieB = await loginUser(app, "userb6@example.com", "Pass123!");
+
+    const res = await app.request(`/api/workspaces/join/${token}`, {
+      method: "POST",
+      headers: { cookie: cookieB },
+    });
+
+    expect(res.status).toBe(410);
   });
 });
