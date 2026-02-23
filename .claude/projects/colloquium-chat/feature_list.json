@@ -12,7 +12,7 @@
   },
   {
     "category": "functional",
-    "description": "User can register with email, username, and password",
+    "description": "Register form (React Hook Form + Zod) submits valid fields and redirects on success",
     "steps": [
       "Step 1: Start both frontend and API servers",
       "Step 2: Navigate to http://localhost:5173/register",
@@ -22,19 +22,19 @@
       "Step 6: Fill confirm-password field with 'SecurePass123!'",
       "Step 7: Click the 'Create account' button",
       "Step 8: Verify redirect to /w/new or the workspace creation page",
-      "Step 9: Verify no error messages are shown",
+      "Step 9: Verify no React Hook Form field-level error messages are shown beneath any input",
       "Step 10: Verify the user exists in the database with a hashed (not plain) password"
     ],
     "passes": false
   },
   {
     "category": "functional",
-    "description": "Registration rejects duplicate email address",
+    "description": "Register form displays server error for duplicate email via React Hook Form setError",
     "steps": [
       "Step 1: Register a user with email 'dup@example.com'",
       "Step 2: Attempt to register another user with the same email 'dup@example.com'",
       "Step 3: Verify the API returns 409 status code",
-      "Step 4: Verify an error message is displayed on the register form"
+      "Step 4: Verify React Hook Form renders the server-returned 409 error message beneath the email field"
     ],
     "passes": false
   },
@@ -54,14 +54,14 @@
   },
   {
     "category": "functional",
-    "description": "Login rejects incorrect password with 401 response",
+    "description": "Login form surfaces 401 error as a React Hook Form root error beneath the form",
     "steps": [
       "Step 1: Register a user with known credentials",
       "Step 2: Navigate to /login",
       "Step 3: Enter correct email and incorrect password 'wrongpassword'",
       "Step 4: Click 'Sign in'",
       "Step 5: Verify the API returns 401",
-      "Step 6: Verify an error message appears on the login form saying incorrect credentials"
+      "Step 6: Verify React Hook Form renders a root error: 'Incorrect email or password' (set via setError('root', ...))"
     ],
     "passes": false
   },
@@ -211,10 +211,10 @@
   },
   {
     "category": "functional",
-    "description": "Channel name is enforced to be kebab-case (lowercase, hyphens only)",
+    "description": "Channel name field (React Hook Form + Zod) auto-normalizes and validates kebab-case format",
     "steps": [
       "Step 1: Attempt to create channel named 'My Channel Name'",
-      "Step 2: Verify the name input auto-converts to 'my-channel-name' or shows an error",
+      "Step 2: Verify the React Hook Form field either auto-transforms the value to 'my-channel-name' or renders a Zod validation error beneath the input",
       "Step 3: Verify the API rejects names with spaces or uppercase letters with 400 status"
     ],
     "passes": false
@@ -282,12 +282,12 @@
   },
   {
     "category": "functional",
-    "description": "Message history loads in pages of 50 and infinite scroll loads older messages",
+    "description": "Infinite scroll message pagination uses nuqs cursor param in URL and TanStack Query useInfiniteQuery",
     "steps": [
       "Step 1: Send 120 messages in a channel",
       "Step 2: Open the channel \u2014 verify the initial 50 most recent messages load",
-      "Step 3: Scroll to the top of the message list",
-      "Step 4: Verify another 50 messages load (the next page)",
+      "Step 3: Scroll to the top of the message list; verify nuqs updates the 'before' cursor param in the URL to the oldest visible message ID",
+      "Step 4: Verify TanStack Query fetches the next page using the nuqs 'before' cursor value from the URL",
       "Step 5: Scroll to top again \u2014 verify the final 20 messages load",
       "Step 6: Verify no additional loading spinner appears at the top (all messages loaded)"
     ],
@@ -341,12 +341,12 @@
   },
   {
     "category": "functional",
-    "description": "Optimistic UI shows message immediately before server confirmation",
+    "description": "TanStack Query optimistic mutation shows message immediately and reconciles on server confirmation",
     "steps": [
       "Step 1: Open the channel with network throttled to slow 3G",
       "Step 2: Type and send a message",
-      "Step 3: Verify the message appears in the list immediately (before API response)",
-      "Step 4: Verify the message transitions from 'pending' to 'confirmed' state",
+      "Step 3: Verify TanStack Query's onMutate callback has added the message optimistically to the query cache before the API responds",
+      "Step 4: Verify TanStack Query's onSuccess callback replaces the optimistic entry with the server-returned message (correct id, created_at)",
       "Step 5: Restore network and verify the message is persisted correctly"
     ],
     "passes": false
@@ -555,11 +555,11 @@
   },
   {
     "category": "functional",
-    "description": "Message composer enforces 4000 character limit",
+    "description": "Message composer enforces 4000-character Zod limit and disables submit via React Hook Form",
     "steps": [
       "Step 1: In the composer, paste text of exactly 4001 characters",
-      "Step 2: Verify the composer shows an error or truncates at 4000 characters",
-      "Step 3: Verify the Send button is disabled when over the limit",
+      "Step 2: Verify the Zod schema validation triggers a React Hook Form error when content exceeds 4000 characters",
+      "Step 3: Verify the Send button is disabled because React Hook Form formState.isValid is false when the Zod max() constraint is violated",
       "Step 4: Verify a character counter shows the count, with warning styling near the limit"
     ],
     "passes": false
@@ -636,12 +636,12 @@
   },
   {
     "category": "functional",
-    "description": "Members list shows all workspace members with their roles and online status",
+    "description": "Members list (TanStack Table) renders all rows with correct role and online status columns",
     "steps": [
       "Step 1: Have 3 users in a workspace (1 owner, 1 admin, 1 member)",
       "Step 2: Navigate to the workspace members list",
-      "Step 3: Verify all 3 users appear with their correct roles displayed",
-      "Step 4: Verify online users have a green indicator"
+      "Step 3: Verify TanStack Table renders 3 data rows, each with role cell content matching the user's actual role (owner/admin/member)",
+      "Step 4: Verify online users have a green indicator in the online status column cell via TanStack Table's cell renderer"
     ],
     "passes": false
   },
@@ -734,10 +734,10 @@
   },
   {
     "category": "functional",
-    "description": "Sending an empty message (whitespace only) is rejected by both UI and API",
+    "description": "Empty/whitespace message rejected by Zod .trim().min(1) on client (React Hook Form) and API",
     "steps": [
       "Step 1: Focus the composer and type only spaces",
-      "Step 2: Verify the Send button is disabled",
+      "Step 2: Verify the Send button is disabled because the Zod schema's .trim().min(1) rule marks the field invalid in React Hook Form",
       "Step 3: POST /api/messages with content '   '",
       "Step 4: Verify response is 422 Unprocessable Entity"
     ],
@@ -799,11 +799,11 @@
   },
   {
     "category": "functional",
-    "description": "Messages API paginates correctly with before cursor",
+    "description": "Messages API paginates with before cursor; frontend passes cursor via nuqs search param",
     "steps": [
       "Step 1: Send 60 messages in a channel",
       "Step 2: GET /api/messages?channelId=X&limit=50 \u2014 verify 50 newest messages returned",
-      "Step 3: Take the oldest message id from step 2 as cursor: GET /api/messages?channelId=X&limit=50&before=:id",
+      "Step 3: Verify nuqs serializes the cursor into the URL as ?before=:id and TanStack Query key includes this param for cache segmentation",
       "Step 4: Verify 10 remaining messages are returned",
       "Step 5: Another call with before cursor returns empty array (hasMore: false)"
     ],
@@ -866,11 +866,11 @@
   },
   {
     "category": "functional",
-    "description": "Refreshing the page restores the user's active workspace and channel view",
+    "description": "Page refresh restores active workspace and channel because route params and nuqs URL state are authoritative",
     "steps": [
       "Step 1: Navigate to /w/my-workspace/channel/dev",
       "Step 2: Refresh the browser",
-      "Step 3: Verify the same workspace and channel re-load correctly",
+      "Step 3: Verify the route params and any nuqs search params survive the refresh and drive the same TanStack Query data fetch",
       "Step 4: Verify the user does not have to re-authenticate"
     ],
     "passes": false
@@ -1329,13 +1329,13 @@
   },
   {
     "category": "style",
-    "description": "Skeleton loaders appear while messages are being fetched",
+    "description": "Skeleton loaders appear while TanStack Query isLoading is true for the messages query",
     "steps": [
       "Step 1: Slow down network (3G throttle)",
       "Step 2: Navigate to a channel",
-      "Step 3: Verify skeleton placeholder rows appear while the message list is loading",
+      "Step 3: Verify the component renders skeleton rows when TanStack Query's useInfiniteQuery returns isLoading: true (no cached data)",
       "Step 4: Verify the skeletons use a subtle animated shimmer effect",
-      "Step 5: Verify skeletons disappear when messages load"
+      "Step 5: Verify skeletons are replaced by real message rows when TanStack Query transitions to isSuccess: true"
     ],
     "passes": false
   },
@@ -1582,12 +1582,12 @@
   },
   {
     "category": "style",
-    "description": "Register form shows password strength indicator",
+    "description": "Register form (React Hook Form watch) drives live password strength indicator",
     "steps": [
       "Step 1: Navigate to /register",
-      "Step 2: Type a weak password (e.g., '123')",
+      "Step 2: Type a weak password (e.g., '123') — verify React Hook Form watch() or onChange triggers the strength indicator to update without submitting",
       "Step 3: Verify a strength indicator shows 'Weak' in red",
-      "Step 4: Type a strong password (e.g., 'SecurePass123!')",
+      "Step 4: Type a strong password — verify the indicator updates reactively via React Hook Form field watching",
       "Step 5: Verify the indicator shows 'Strong' in green"
     ],
     "passes": false
@@ -1649,11 +1649,11 @@
   },
   {
     "category": "functional",
-    "description": "Channel message count displayed in channel browser",
+    "description": "Channel browser (TanStack Table) displays message count column per channel row",
     "steps": [
       "Step 1: Send 5 messages to #announcements",
       "Step 2: Open the channel browser as a user not in #announcements",
-      "Step 3: Verify the channel browser row for #announcements shows the member count or message count",
+      "Step 3: Verify the TanStack Table row for #announcements renders a message count cell matching the database count",
       "Step 4: Verify the number matches the actual database count"
     ],
     "passes": false
@@ -1707,11 +1707,11 @@
   },
   {
     "category": "functional",
-    "description": "Registering with a username containing special characters is rejected",
+    "description": "Registering with an invalid username is rejected by Zod schema on the API with a 422 response",
     "steps": [
       "Step 1: POST /api/auth/register with username containing spaces or special chars like my user!",
       "Step 2: Verify response is 422 Unprocessable Entity",
-      "Step 3: Verify error message explains username format requirements",
+      "Step 3: Verify the Zod validation error message from the API describes the allowed username pattern (e.g., alphanumeric + underscores only)",
       "Step 4: Verify no user is created in the database"
     ],
     "passes": false
@@ -1842,10 +1842,10 @@
   },
   {
     "category": "style",
-    "description": "Error messages on forms are displayed in red (#ef4444)",
+    "description": "React Hook Form field error messages are styled in red (#ef4444) beneath their inputs",
     "steps": [
-      "Step 1: Submit the login form with invalid credentials",
-      "Step 2: Verify an error message appears below the form or near the relevant field",
+      "Step 1: Submit the login form with invalid credentials and observe React Hook Form validation errors appear",
+      "Step 2: Verify React Hook Form renders the error message as a <p> or <span> directly beneath the relevant field",
       "Step 3: Verify the error text color is #ef4444",
       "Step 4: Verify error text is legible (adequate font size, not too small)"
     ],
@@ -2081,13 +2081,13 @@
   },
   {
     "category": "style",
-    "description": "Channel join button in channel browser has loading state on click",
+    "description": "Channel join button reflects TanStack Query mutation isPending state while join request is in flight",
     "steps": [
       "Step 1: Open channel browser on slow network",
       "Step 2: Click Join on a public channel",
-      "Step 3: Verify the Join button shows a spinner or loading text",
-      "Step 4: Verify the button is disabled while the join request is in flight",
-      "Step 5: After joining, the button changes to Joined or disappears"
+      "Step 3: Verify the Join button enters loading state when TanStack Query's useMutation isPending is true",
+      "Step 4: Verify the button's disabled attribute is bound to useMutation's isPending property, not a local useState flag",
+      "Step 5: Verify TanStack Query's onSuccess callback invalidates the channel list query, causing the browser list to refetch and remove or relabel the joined channel row"
     ],
     "passes": false
   },
@@ -2150,12 +2150,12 @@
   },
   {
     "category": "style",
-    "description": "Member list rows show avatar, name, and role in a consistent grid alignment",
+    "description": "TanStack Table member list rows align avatar, name, and role columns consistently",
     "steps": [
       "Step 1: Open the workspace members list",
-      "Step 2: Verify all rows are aligned: avatar left, name center, role right",
+      "Step 2: Verify TanStack Table column definitions assign correct alignment: avatar column (left), name column (center), role column (right)",
       "Step 3: Verify vertical alignment is centered for each row element",
-      "Step 4: Verify row height is consistent across all member entries"
+      "Step 4: Verify TanStack Table does not produce variable row heights due to missing explicit row sizing in cell renderers"
     ],
     "passes": false
   },

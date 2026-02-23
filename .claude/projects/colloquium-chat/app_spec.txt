@@ -13,6 +13,10 @@
       <framework>React 18 + Vite 5</framework>
       <styling>Tailwind CSS 4 (utility-first, dark-mode via class strategy)</styling>
       <state_management>Zustand 5 (feature-sliced stores)</state_management>
+      <server_state>TanStack Query v5 (all API fetching, caching, mutations, optimistic updates)</server_state>
+      <forms>React Hook Form v7 + Zod resolvers (all form validation — register, login, settings, create-workspace, create-channel)</forms>
+      <tables>TanStack Table v8 (member lists, channel browser — sorting, filtering, pagination)</tables>
+      <url_state>nuqs v2 (URL search params as typed state — channel filter, message search, pagination cursors)</url_state>
       <routing>React Router v7 (client-side SPA routing)</routing>
       <port>Only launch on port 5173</port>
     </frontend>
@@ -51,13 +55,13 @@
       - Workspace switcher: icon rail on far-left column
       - Each workspace has a unique slug used in URLs (/w/:slug)
       - Workspace settings page (name, icon, danger zone: leave/delete)
-      - Members list with roles: owner, admin, member
+      - Members list with roles: owner, admin, member (TanStack Table — sortable by name/role, searchable)
     </workspaces>
 
     <channels>
       - Default channel #general auto-created with new workspace
       - Create channel: name (kebab-case enforced), description, public/private toggle
-      - Channel browser: list all public channels the user is not yet in, with join button
+      - Channel browser: list all public channels the user is not yet in, with join button (TanStack Table with name filter + sort)
       - Channel sidebar lists all joined channels sorted alphabetically
       - Archive/delete channel (owner/admin only)
       - Channel header: name, description, member count
@@ -76,7 +80,7 @@
       - WebSocket events: message.new, message.update, message.delete, user.typing, user.presence
       - Typing indicator: shown when a member is typing, auto-clears after 3 s
       - Optimistic UI: message appears immediately in sender's UI, confirmed on WS ack
-      - Message list: paginated (50 per page), infinite scroll upward to load history
+      - Message list: paginated (50 per page), infinite scroll upward to load history (TanStack Query useInfiniteQuery + cursor in nuqs)
       - Timestamps: relative (e.g., "2 min ago") for recent, absolute for older
       - Day separator dividers between messages from different calendar days
     </real_time_messaging>
@@ -360,8 +364,8 @@
     6. Channels API — CRUD + join/browse, channel_members
     7. Messages API — paginated history, POST/PATCH/DELETE, thread support
     8. Direct Messages API — conversation open/list, message routing
-    9. Frontend auth flow — login/register pages, auth store, route guards
-    10. Frontend workspace + channel scaffold — layout shell (3 columns), workspace rail, channel sidebar
+    9. Frontend auth flow — login/register pages (React Hook Form + Zod), auth store (Zustand), route guards, TanStack Query auth mutations
+    10. Frontend workspace + channel scaffold — layout shell (3 columns), workspace rail, channel sidebar; TanStack Query for workspace/channel data; nuqs for URL state
     11. Chat view — messages list with infinite scroll, day dividers, Markdown rendering (Prism)
     12. Real-time integration — WS client, typing indicators, presence dots
     13. Composer — contenteditable rich input, keyboard shortcuts, emoji picker
