@@ -372,3 +372,143 @@ After writing all three files, display:
 Verify all three files exist on disk using Bash `ls`. If any file is missing, write it before proceeding.
 
 ---
+
+### Phase B3: Monorepo Scaffold
+
+Create the actual app directories and wire them into the monorepo.
+
+---
+
+#### Step B3.1 — Create app directories
+
+Based on the tech stack from Q&A, create the following structure:
+
+**Always create:**
+
+```bash
+mkdir -p apps/<slug>/src
+```
+
+**If backend requested:**
+
+```bash
+mkdir -p apps/<slug>-api/src
+```
+
+**If shared types are needed (backend + frontend share schemas):**
+
+```bash
+mkdir -p packages/<slug>-types/src
+```
+
+---
+
+#### Step B3.2 — Write config files
+
+For each created directory, write the minimum required config files for the chosen tech stack. Use the framework's standard conventions.
+
+**Frontend (React + Vite example):**
+
+- `apps/<slug>/package.json` — name: `@colloquium/<slug>`, scripts: dev/build/preview/typecheck
+- `apps/<slug>/tsconfig.json` — extends `@colloquium/tsconfig/base`
+- `apps/<slug>/vite.config.ts` — standard Vite config with the chosen port
+- `apps/<slug>/tailwind.config.ts` — if Tailwind selected
+- `apps/<slug>/index.html` — Vite entry point
+- `apps/<slug>/src/main.tsx` — React root
+- `apps/<slug>/src/App.tsx` — placeholder root component
+
+**Backend (Node/Express example):**
+
+- `apps/<slug>-api/package.json` — name: `@colloquium/<slug>-api`, scripts: dev/build/start/typecheck
+- `apps/<slug>-api/tsconfig.json` — extends `@colloquium/tsconfig/base`
+- `apps/<slug>-api/src/index.ts` — Express server with a `/api/health` endpoint
+
+**Types package (if created):**
+
+- `packages/<slug>-types/package.json` — name: `@colloquium/<slug>-types`
+- `packages/<slug>-types/src/index.ts` — placeholder exports
+- `packages/<slug>-types/tsconfig.json`
+
+---
+
+#### Step B3.3 — Install dependencies
+
+```bash
+pnpm install
+```
+
+Verify it completes without errors. If errors occur, fix them before proceeding.
+
+---
+
+#### Step B3.4 — Verify turborepo picks up new packages
+
+```bash
+pnpm turbo build --filter=<slug>...
+```
+
+Expected: build completes (even if it's just an empty app). If it fails: fix config files before proceeding.
+
+---
+
+#### Step B3.5 — Write `project-state.json`
+
+Write to: `.claude/projects/<slug>/project-state.json`
+
+```json
+{
+  "version": 1,
+  "slug": "<slug>",
+  "name": "<name from Q&A>",
+  "appDir": "apps/<slug>",
+  "apiDir": "apps/<slug>-api",
+  "packages": ["packages/<slug>-types"],
+  "specFile": ".claude/projects/<slug>/app_spec.txt",
+  "featureListFile": ".claude/projects/<slug>/feature_list.json",
+  "progressFile": ".claude/projects/<slug>/claude-progress.txt",
+  "totalTests": 200,
+  "passingTests": 0,
+  "currentTestIndex": 0,
+  "phase": "develop",
+  "lastUpdated": "<current ISO timestamp>",
+  "sessionCount": 1
+}
+```
+
+Omit `"apiDir"` if no backend was created. Omit empty `"packages"` array entries.
+
+---
+
+#### Step B3.6 — Update `claude-progress.txt`
+
+Fill in the `PROJECT STRUCTURE` section with the actual directories and key files just created.
+
+---
+
+#### Step B3.7 — Initial git commit (EXCEPTION to the no-git rule)
+
+This is the ONE place the skill touches git directly — to create the initial skeleton commit:
+
+```bash
+git add apps/<slug>/ apps/<slug>-api/ packages/<slug>-types/ .claude/projects/<slug>/
+git commit -m "feat(<slug>): scaffold monorepo structure — bootstrap complete"
+```
+
+---
+
+#### Bootstrap complete banner
+
+```
+════════════════════════════════════════════════════════════════
+✅ BOOTSTRAP COMPLETE — [name]
+════════════════════════════════════════════════════════════════
+App dir:      apps/<slug>/
+API dir:      apps/<slug>-api/        (if applicable)
+State:        .claude/projects/<slug>/project-state.json
+Tests:        0 / 200 passing
+Next step:    /colloquium:project → continue → <slug>
+              pnpm turbo dev  (to start all apps)
+════════════════════════════════════════════════════════════════
+```
+
+---
