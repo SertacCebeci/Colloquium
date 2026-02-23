@@ -75,7 +75,16 @@
       "mcp__plugin_playwright_playwright__browser_navigate",
       "mcp__plugin_playwright_playwright__browser_fill_form",
       "mcp__plugin_playwright_playwright__browser_click",
-      "mcp__plugin_playwright_playwright__browser_take_screenshot"
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_run_code",
+      "Bash(pnpm --filter=@colloquium/colloquium-chat test:*)",
+      "mcp__puppeteer__puppeteer_fill",
+      "Bash(pnpm --filter=@colloquium/colloquium-chat-api test -- --run src/__tests__/workspaces.test.ts)",
+      "Bash(pkill:*)",
+      "Read(//private/tmp/**)",
+      "mcp__plugin_playwright_playwright__browser_type",
+      "Bash(sqlite3:*)",
+      "mcp__plugin_playwright_playwright__browser_snapshot"
     ],
     "additionalDirectories": [
       "./vault",
@@ -85,7 +94,8 @@
       "./.claude/commands/skills",
       "./.claude/context",
       "./docs/plans",
-      "./apps/colloquium-blog"
+      "./apps/colloquium-blog",
+      "/Users/alisertaccebeci/Colloquium/.claude/projects/colloquium-chat"
     ]
   },
   "enabledPlugins": {
