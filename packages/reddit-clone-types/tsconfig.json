@@ -1,0 +1,7 @@
+{
+  "extends": "@colloquium/tsconfig/base",
+  "compilerOptions": {
+    "outDir": "./dist"
+  },
+  "include": ["src"]
+}
