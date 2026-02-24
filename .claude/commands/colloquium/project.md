@@ -6,7 +6,7 @@ Invoke as:
 /colloquium:project → prompts new or continue
 /colloquium:project <slug> → continue the named project directly
 
-**Version:** v3 — Bootstrap + Develop flows, per-project state under .claude/projects/
+**Version:** v5 — Bootstrap + Develop flows, per-project state under .claude/projects/, Loop Mode for autonomous development
 
 ---
 
@@ -18,6 +18,72 @@ Invoke as:
 4. **Hard gates block.** Steps marked HARD GATE loop until the gate condition is met — do NOT proceed without it.
 5. **feature_list.json is append-only.** Only the `"passes"` field may be changed. Descriptions, steps, and ordering are NEVER modified.
 6. **AI never touches git beyond reading status.** No branch creation, no push, no PR — the human controls all git operations. The ONE exception: the initial scaffold commit in Phase B3 (explicitly described below).
+7. **Loop Mode overrides all interactive prompts.** When Loop Mode is active (invocation contains `--loop`), NEVER call `AskUserQuestion`. Implement exactly one test, save state, then exit cleanly. The outer bash loop handles iteration.
+
+---
+
+## LOOP MODE — Autonomous Continuous Development
+
+Loop Mode enables fully autonomous development driven by `scripts/colloquium-develop.sh`. No plugins required. Each invocation is a fresh Claude process with clean context (s04: process isolation = context isolation). State persists entirely in files on disk (s07: state survives across processes).
+
+### Architecture
+
+```
+scripts/colloquium-develop.sh <slug>
+  │
+  ├─ reads project-state.json          ← source of truth (s07)
+  ├─ completion check → exit 0
+  ├─ BLOCKED check (.dev-signal file)  → exit 1
+  │
+  └─ for each iteration:
+       │
+       └─ claude --print "/colloquium:project <slug> --loop"
+            │
+            ├─ fresh messages=[]         ← process isolation (s04)
+            ├─ reads project-state.json  ← picks up where last left off
+            ├─ implements ONE test
+            ├─ browser verifies
+            ├─ increments project-state.json
+            ├─ commits
+            └─ exits cleanly
+```
+
+### Detection (FIRST thing to check, before Phase 0)
+
+Inspect the invocation arguments. If they contain `--loop`:
+- Set `LOOP_MODE=true`
+- Display: `🤖 Loop Mode — implementing test #[currentTestIndex + 1]`
+- Skip Phase 0 entirely — go directly to Flow 2 with the provided slug
+
+If `--loop` is absent → normal interactive behavior, run Phase 0.
+
+### When `LOOP_MODE=true`
+
+1. **Phase 0 is skipped** — the slug is already in the invocation arguments.
+2. **No `AskUserQuestion` calls** — NEVER pause to ask the human anything.
+3. **Implement exactly one test** — the test at `currentTestIndex` in `feature_list.json`.
+4. **After the test passes** → save state, commit, then exit cleanly. The bash loop handles the next iteration.
+5. **Bootstrap (Flow 1) is never entered** — requires human Q&A by definition.
+6. **On blocked** → write signal file and exit:
+   ```bash
+   echo "BLOCKED: Test #[index] — [description]" > .claude/projects/<slug>/.dev-signal
+   ```
+   Then exit. The bash loop detects this file and stops with a human-readable error.
+
+### How to start Loop Mode
+
+```bash
+./scripts/colloquium-develop.sh colloquium-chat
+```
+
+With options:
+
+```bash
+./scripts/colloquium-develop.sh colloquium-chat --max-iterations 50
+./scripts/colloquium-develop.sh colloquium-chat --verbose   # streams claude output
+```
+
+The script handles all iteration, progress display, completion detection, and BLOCKED handling. The skill just needs to implement one test and exit.
 
 ---
 
@@ -693,27 +759,45 @@ Next step:    /colloquium:project → continue → <slug>
 ### Session Start
 
 1. Read `.claude/projects/<slug>/project-state.json`.
-2. Count passing tests in `feature_list.json`:
+2. **Increment `sessionCount`** by 1 and write it back to `project-state.json` immediately.
+3. Count passing tests in `feature_list.json`:
    ```bash
    grep -c '"passes": true' .claude/projects/<slug>/feature_list.json
    ```
-3. Display session start banner:
+4. Display session start banner:
 
 ```
 ════════════════════════════════════════════════════════════════
-▶ DEVELOP SESSION — [name]
+▶ DEVELOP SESSION — [name]  [🤖 RALPH MODE — autonomous] (if ralph)
 ════════════════════════════════════════════════════════════════
 Progress:     [passingTests] / [totalTests] tests passing
 Next test:    #[currentTestIndex] — [description]
-Session:      #[sessionCount + 1]
+Session:      #[new sessionCount]
 ════════════════════════════════════════════════════════════════
 ```
 
-4. Run all apps in dev mode:
+5. Start dev servers (if not already running):
+
+   Read the frontend port from `app_spec.txt` (default: 5173) and backend port (default: 5001 if backend exists).
+
+   Check if servers are already up:
    ```bash
-   pnpm turbo dev
+   curl -s http://localhost:5173 > /dev/null 2>&1 && echo "FRONTEND_UP" || echo "FRONTEND_DOWN"
+   curl -s http://localhost:5001/api/health > /dev/null 2>&1 && echo "BACKEND_UP" || echo "BACKEND_DOWN"
    ```
-   Wait for all apps to report "ready" before proceeding.
+
+   - If all expected servers respond → skip `pnpm turbo dev`, display: `✓ Dev servers already running — skipping start`
+   - If any server is down → run in background:
+     ```bash
+     pnpm turbo dev &
+     ```
+     Wait up to 30 seconds for the ports to respond before proceeding.
+
+   **In Loop Mode:** If a server that was down still doesn't respond after 30 seconds:
+   ```bash
+   echo "BLOCKED: Dev server failed to start after 30s" > .claude/projects/<slug>/.dev-signal
+   ```
+   Then exit. The bash loop will detect this file and stop.
 
 ---
 
@@ -781,7 +865,20 @@ Enforced sequence:
 
 Use Skill tool: `superpowers:systematic-debugging`
 
-If this also fails to resolve: STOP. Return to Phase B2 spec review — the feature may be under-specified.
+If this also fails to resolve:
+
+- **Interactive Mode:** STOP. Return to Phase B2 spec review — the feature may be under-specified.
+- **Loop Mode:** Append to `claude-progress.txt`:
+  ```
+  [BLOCKED] Test #[index]: [description]
+  Reason: systematic-debugging exhausted — feature may be under-specified
+  Time: [ISO timestamp]
+  ```
+  Write signal file so the bash loop stops:
+  ```bash
+  echo "BLOCKED: Test #[index] — [description]" > .claude/projects/<slug>/.dev-signal
+  ```
+  Then exit cleanly.
 
 ---
 
@@ -848,19 +945,25 @@ State saved.
 ════════════════════════════════════════════════════════════════
 ```
 
-6. Ask: "Continue to test [N+1] or stop here?"
+6. **Decide whether to continue:**
+
+   **Interactive Mode:** Ask: "Continue to test [N+1] or stop here?"
    - Continue → next test inner cycle
    - Stop → display session-end banner:
 
-```
-════════════════════════════════════════════════════════════════
-⏸ SESSION PAUSED — [name]
-════════════════════════════════════════════════════════════════
-Progress:  [passingTests] / [totalTests] tests passing
-State saved: .claude/projects/<slug>/project-state.json
-Resume with: /colloquium:project
-════════════════════════════════════════════════════════════════
-```
+   ```
+   ════════════════════════════════════════════════════════════════
+   ⏸ SESSION PAUSED — [name]
+   ════════════════════════════════════════════════════════════════
+   Progress:  [passingTests] / [totalTests] tests passing
+   State saved: .claude/projects/<slug>/project-state.json
+   Resume with: /colloquium:project
+   ════════════════════════════════════════════════════════════════
+   ```
+
+   **Loop Mode:** Do NOT ask. After saving state, **exit cleanly**. The bash loop (`scripts/colloquium-develop.sh`) reads `project-state.json` and spawns the next fresh claude process. One test per invocation — this is how context stays clean (fresh `messages=[]` every time). The only exit variations are:
+   - Project complete → display banner, then exit normally (bash detects `passingTests >= totalTests`)
+   - Blocked (Step 3c) → write `.dev-signal` file, then exit (bash detects `BLOCKED:` prefix)
 
 ---
 
@@ -879,5 +982,7 @@ State preserved at: .claude/projects/<slug>/project-state.json
 Human handles merge / deployment.
 ════════════════════════════════════════════════════════════════
 ```
+
+**In Loop Mode:** After displaying this banner, exit cleanly. The bash loop (`scripts/colloquium-develop.sh`) reads `project-state.json` and detects `passingTests >= totalTests`, then exits with code 0 and displays the completion banner on the terminal.
 
 ---
