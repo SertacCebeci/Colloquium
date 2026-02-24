@@ -48,3 +48,12 @@ export function createDb(dbPath: string) {
 
   return db;
 }
+
+let _db: ReturnType<typeof createDb> | null = null;
+
+export function getDb(dbPath?: string): ReturnType<typeof createDb> {
+  if (!_db) {
+    _db = createDb(dbPath ?? process.env.DATABASE_PATH ?? "./db/reddit.db");
+  }
+  return _db;
+}
