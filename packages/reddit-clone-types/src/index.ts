@@ -45,6 +45,7 @@ export interface ApiPost {
   isLocked: boolean;
   isStickied: boolean;
   score: number;
+  userVote: VoteValue | null; // null = not voted
   commentCount: number;
   createdAt: number;
   editedAt: number | null;
@@ -63,4 +64,8 @@ export interface ApiComment {
   createdAt: number;
   editedAt: number | null;
   replies: ApiComment[];
+}
+
+export interface ApiError {
+  error: string;
 }
