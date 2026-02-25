@@ -6,11 +6,21 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeSlice.state = "B3"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
+
+   ```
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
+   ```
+
+   Then stop.
+
+   Resolve cursor: `versionId = state.activeVersion`, `currentVersion = state.versions[versionId]`. Split `state.activeSlice` on "/" → `[versionId, sliceId]`. `currentSlice = currentVersion.slices[sliceId]`.
+
+   Require `currentSlice.state = "B3"`. If not, display:
 
    ```
    ❌ Requires activeSlice.state = "B3".
-   Current state: <activeSlice.state>. Run /colloquium:slice-model first.
+   Current state: <currentSlice.state>. Run /colloquium:slice-model first.
    ```
 
    Then stop.
@@ -25,7 +35,7 @@
 
 ### Step 1: Read the model
 
-Read `docs/slices/<activeSlice.id>/model.md` in full. Extract the "Cross-Context Integrations" section. Build a list of every named integration:
+Extract `sliceId` from `state.activeSlice` (split on "/", take index 1). Read `docs/slices/<sliceId>/model.md` in full. Extract the "Cross-Context Integrations" section. Build a list of every named integration:
 
 - Integration name (event name or API endpoint)
 - Direction: produced by which BC, consumed by which BC
@@ -49,7 +59,7 @@ For each integration point, write `docs/contracts/CT-<n>-<kebab-name>.md`.
 **Type:** Event
 **Producer:** <BoundedContext>
 **Consumer:** <BoundedContext>
-**Slice:** <activeSlice.id>
+**Slice:** <sliceId>
 
 ## Payload Schema
 
@@ -91,7 +101,7 @@ New optional fields only. Breaking changes (removing fields, changing types, alt
 **Type:** API
 **Provider:** <BoundedContext>
 **Consumer:** <BoundedContext>
-**Slice:** <activeSlice.id>
+**Slice:** <sliceId>
 
 ## Endpoint
 
@@ -166,13 +176,19 @@ Do not write state.json.
 
 ### Step 5: Write `.claude/sdlc/state.json`
 
-Only after all contracts are confirmed. Update `activeSlice.state = "B4"` and add contract IDs to `activeSlice.contracts[]`. Preserve all other fields.
+Only after all contracts are confirmed. Merge into the versions tree. Preserve all other fields.
 
 ```json
 {
-  "activeSlice": {
-    "state": "B4",
-    "contracts": ["CT-001", "CT-002"]
+  "versions": {
+    "<activeVersion>": {
+      "slices": {
+        "<sliceId>": {
+          "state": "B4",
+          "contracts": ["CT-001", "CT-002"]
+        }
+      }
+    }
   },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:slice-contracts"
