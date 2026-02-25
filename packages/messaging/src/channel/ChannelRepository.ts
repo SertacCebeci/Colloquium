@@ -62,6 +62,28 @@ export class ChannelRepository {
   }
 
   /**
+   * Returns all ChannelMessagePosted events with seq > fromSeq, in ascending
+   * seq order. Returns null if the channel does not exist.
+   *
+   * - Returns `null` when the channel has no events (not registered)
+   * - Returns `[]`   when the channel exists but no messages satisfy seq > fromSeq
+   */
+  findMessagesSinceSeq(channelId: string, fromSeq: number): ChannelMessagePosted[] | null {
+    const events = this.eventStore.load(channelId);
+    // A registered channel always has at least one event (ChannelRegistered).
+    // An empty event list therefore means the channel was never registered — return null.
+    if (events.length === 0) return null;
+
+    const messages = events
+      .filter(
+        (e): e is ChannelMessagePosted => e.type === "ChannelMessagePosted" && e.seq > fromSeq
+      )
+      .sort((a, b) => a.seq - b.seq);
+
+    return messages;
+  }
+
+  /**
    * Returns paginated ChannelMessagePosted events for a channel, or null if
    * the channel does not exist. Results are ordered by seq ascending.
    *
@@ -72,10 +94,12 @@ export class ChannelRepository {
     const events = this.eventStore.load(channelId);
     if (events.length === 0) return null;
 
-    let messages = events.filter((e): e is ChannelMessagePosted => e.type === "ChannelMessagePosted");
+    let messages = events.filter(
+      (e): e is ChannelMessagePosted => e.type === "ChannelMessagePosted"
+    );
 
     if (before !== undefined) {
-      messages = messages.filter(e => e.seq < before);
+      messages = messages.filter((e) => e.seq < before);
     }
 
     messages.sort((a, b) => a.seq - b.seq);

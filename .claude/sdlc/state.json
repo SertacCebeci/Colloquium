@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
   "activeVersion": "v1",
-  "activeSlice": "v1/SL-001",
-  "activeFeature": "v1/SL-001/feat-006",
-  "lastUpdated": "2026-02-25T18:50:00.000Z",
-  "lastSkill": "colloquium:feature-implement",
+  "activeSlice": null,
+  "activeFeature": null,
+  "lastUpdated": "2026-02-25T23:45:00.000Z",
+  "lastSkill": "colloquium:slice-validate",
   "versions": {
     "v1": {
       "id": "v1",
@@ -18,13 +18,23 @@
         "completed": ["A0", "A1", "A2", "A3"],
         "locked": true
       },
-      "completedSlices": [],
-      "completedFeatures": ["feat-001", "feat-002", "feat-003", "feat-004", "feat-005"],
+      "completedSlices": ["SL-001"],
+      "completedFeatures": [
+        "feat-001",
+        "feat-002",
+        "feat-003",
+        "feat-004",
+        "feat-005",
+        "feat-006",
+        "feat-007",
+        "feat-008",
+        "feat-009"
+      ],
       "slices": {
         "SL-001": {
           "id": "SL-001",
           "name": "channel-message-delivery",
-          "state": "B5",
+          "state": "done",
           "contracts": ["CT-001", "CT-002", "CT-003"],
           "featureOrder": [
             "feat-001",
@@ -89,7 +99,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-001"],
-              "state": "C7",
+              "state": "done",
               "history": []
             },
             "feat-007": {
@@ -98,7 +108,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-001", "feat-006"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-008": {
@@ -107,7 +117,7 @@
               "bc": "Messaging",
               "type": "aggregate",
               "dependencies": ["feat-001", "feat-006", "feat-007"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-009": {
@@ -116,7 +126,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-008"],
-              "state": "C0",
+              "state": "done",
               "history": []
             }
           }
