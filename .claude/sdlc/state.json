@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
   "activeVersion": "v1",
-  "activeSlice": null,
-  "activeFeature": null,
-  "lastUpdated": "2026-02-25T23:45:00.000Z",
-  "lastSkill": "colloquium:slice-validate",
+  "activeSlice": "v1/SL-002",
+  "activeFeature": "v1/SL-002/feat-001",
+  "lastUpdated": "2026-02-26T01:45:00.000Z",
+  "lastSkill": "colloquium:feature-implement",
   "versions": {
     "v1": {
       "id": "v1",
@@ -31,6 +31,106 @@
         "feat-009"
       ],
       "slices": {
+        "SL-002": {
+          "id": "SL-002",
+          "name": "channel-feed-send-ui",
+          "state": "B5",
+          "contracts": ["CT-004", "CT-005"],
+          "featureOrder": [
+            "feat-001",
+            "feat-002",
+            "feat-003",
+            "feat-004",
+            "feat-005",
+            "feat-006",
+            "feat-007",
+            "feat-008",
+            "feat-009"
+          ],
+          "features": {
+            "feat-001": {
+              "id": "feat-001",
+              "name": "channel-feed-aggregate",
+              "bc": "Messaging",
+              "type": "aggregate",
+              "dependencies": [],
+              "state": "C4",
+              "history": []
+            },
+            "feat-002": {
+              "id": "feat-002",
+              "name": "message-composer-aggregate",
+              "bc": "Messaging",
+              "type": "aggregate",
+              "dependencies": ["feat-001"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-003": {
+              "id": "feat-003",
+              "name": "get-channel-messages-api-wiring",
+              "bc": "Messaging",
+              "type": "contract",
+              "dependencies": ["feat-001"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-004": {
+              "id": "feat-004",
+              "name": "post-channel-message-api-wiring",
+              "bc": "Messaging",
+              "type": "contract",
+              "dependencies": ["feat-001", "feat-002"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-005": {
+              "id": "feat-005",
+              "name": "channel-feed-page-read-model",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-003"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-006": {
+              "id": "feat-006",
+              "name": "infinite-channel-feed-read-model",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-005"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-007": {
+              "id": "feat-007",
+              "name": "channel-message-form-state",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-002", "feat-004"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-008": {
+              "id": "feat-008",
+              "name": "channel-page-error-state",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-006", "feat-007"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-009": {
+              "id": "feat-009",
+              "name": "e2e-channel-feed-playwright",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-006", "feat-007", "feat-008"],
+              "state": "C0",
+              "history": []
+            }
+          }
+        },
         "SL-001": {
           "id": "SL-001",
           "name": "channel-message-delivery",

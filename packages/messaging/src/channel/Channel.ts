@@ -74,6 +74,10 @@ export class Channel {
     return this._state;
   }
 
+  hasMember(memberId: string): boolean {
+    return this._allowedPosters.has(memberId);
+  }
+
   // ── Commands ────────────────────────────────────────────────────────────────
 
   registerChannel(workspaceId: string): ChannelRegistered[] {
@@ -100,9 +104,11 @@ export class Channel {
 
   grantChannelMembership(memberId: string): ChannelMembershipGranted[] {
     if (this._state !== "Active") {
-      throw new Error(`Channel ${this.channelId} is not Active (state: ${this._state}) — GrantChannelMembership rejected`);
+      throw new Error(
+        `Channel ${this.channelId} is not Active (state: ${this._state}) — GrantChannelMembership rejected`
+      );
     }
-    if (this._allowedPosters.has(memberId)) {
+    if (this.hasMember(memberId)) {
       return []; // idempotent — already a member
     }
     const event: ChannelMembershipGranted = {
@@ -115,20 +121,39 @@ export class Channel {
     return [event];
   }
 
-  postChannelMessage(authorId: string, content: string): (ChannelMessagePosted | ChannelAccessDenied | MessageValidationFailed)[] {
+  postChannelMessage(
+    authorId: string,
+    content: string
+  ): (ChannelMessagePosted | ChannelAccessDenied | MessageValidationFailed)[] {
     if (this._state !== "Active") {
-      throw new Error(`Channel ${this.channelId} is not Active (state: ${this._state}) — PostChannelMessage rejected`);
+      throw new Error(
+        `Channel ${this.channelId} is not Active (state: ${this._state}) — PostChannelMessage rejected`
+      );
     }
-    if (!this._allowedPosters.has(authorId)) {
-      const event: ChannelAccessDenied = { type: "ChannelAccessDenied", channelId: this.channelId, authorId };
+    if (!this.hasMember(authorId)) {
+      const event: ChannelAccessDenied = {
+        type: "ChannelAccessDenied",
+        channelId: this.channelId,
+        authorId,
+      };
       return [event];
     }
     if (content.trim().length === 0) {
-      const event: MessageValidationFailed = { type: "MessageValidationFailed", channelId: this.channelId, authorId, reason: "EMPTY_CONTENT" };
+      const event: MessageValidationFailed = {
+        type: "MessageValidationFailed",
+        channelId: this.channelId,
+        authorId,
+        reason: "EMPTY_CONTENT",
+      };
       return [event];
     }
     if (content.length > 4000) {
-      const event: MessageValidationFailed = { type: "MessageValidationFailed", channelId: this.channelId, authorId, reason: "CONTENT_TOO_LONG" };
+      const event: MessageValidationFailed = {
+        type: "MessageValidationFailed",
+        channelId: this.channelId,
+        authorId,
+        reason: "CONTENT_TOO_LONG",
+      };
       return [event];
     }
     const event: ChannelMessagePosted = {

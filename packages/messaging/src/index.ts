@@ -20,6 +20,12 @@ export { ChannelRepository, InMemoryChannelEventStore } from "./channel/ChannelR
 export type { ChannelEventStore } from "./channel/ChannelRepository";
 export { queryChannelFeed } from "./channel/ChannelFeedView";
 export type { ChannelFeedPayload } from "./channel/ChannelFeedView";
+export { handleGetChannelMessages } from "./channel/GetChannelMessagesAcl";
+export type {
+  GetChannelMessagesPayload,
+  MessageItem,
+  ChannelFeedPageV1,
+} from "./channel/GetChannelMessagesAcl";
 export { queryChannelSequenceHead } from "./channel/ChannelSequenceHead";
 export type { ChannelSequenceHeadPayload } from "./channel/ChannelSequenceHead";
 export { queryMessagesSinceSeq } from "./channel/ChannelMessagesSinceSeq";
