@@ -6,11 +6,27 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeFeature.state` to be one of: `C2`, `C3`, `C4`, `C5`, `C6`. If not:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
+
+   ```
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
+   ```
+
+   Then stop.
+
+   Resolve current context:
+   - versionId = state.activeVersion
+   - currentVersion = state.versions[versionId]
+   - Split state.activeSlice (e.g., "v1/SL-001") on "/" → [versionId, sliceId]
+   - currentSlice = currentVersion.slices[sliceId]
+   - Split state.activeFeature (e.g., "v1/SL-001/feat-006") on "/" → [versionId, sliceId, featureId]
+   - currentFeature = currentSlice.features[featureId]
+
+   Require `currentFeature.state` to be one of: `C2`, `C3`, `C4`, `C5`, `C6`. If not:
    - State `C0` or `C1`: run `/colloquium:feature-spec` first
    - State `C7`: feature implementation is already done — run `/colloquium:feature-verify`
    - State `done` or `F4`: feature is past implementation — run `/colloquium:feature-integrate` or `/colloquium:feature-verify`
-   - No `activeFeature`: run `/colloquium:slice-deliver` to set up the feature queue
+   - No `activeFeature` (null): run `/colloquium:slice-deliver` to set up the feature queue
 
 2. **Read the spec at session start.** Always read `docs/features/<bc>/<aggregate>/spec.md` before doing any work. Every implementation decision must be traceable to a spec section.
 
@@ -20,16 +36,16 @@
 
 ## Session Start
 
-On every invocation, display the current position:
+On every invocation, resolve the cursor (as in Rule 1) and display the current position:
 
 ```
 ════════════════════════════════════════════════════════════════
-▶ FEATURE IMPLEMENT — <feat-id>: <name>
+▶ FEATURE IMPLEMENT — <featureId>: <currentFeature.name>
 ════════════════════════════════════════════════════════════════
-Current state: <C-state>
+Current state: <currentFeature.state>
 Resuming at:   <sub-step name>
 
-Spec: docs/features/<BC>/<Aggregate>/spec.md
+Spec: docs/features/<currentFeature.bc>/<currentFeature.name>/spec.md
 ════════════════════════════════════════════════════════════════
 ```
 
@@ -55,7 +71,18 @@ Then jump directly to the sub-step corresponding to the current state.
 
 5. Confirm RED: run tests. If any test passes immediately, that test is not asserting enough — revise it until it fails for the right reason.
 
-6. **State write:** Update `activeFeature.state = "C3"` in state.json after RED is confirmed.
+6. **State write:** Merge into versions tree — update `currentFeature.state = "C3"` after RED is confirmed:
+   ```json
+   {
+     "versions": {
+       "<versionId>": {
+         "slices": { "<sliceId>": { "features": { "<featureId>": { "state": "C3" } } } }
+       }
+     },
+     "lastUpdated": "<ISO timestamp>",
+     "lastSkill": "colloquium:feature-implement"
+   }
+   ```
 
 ---
 
@@ -77,7 +104,18 @@ Then jump directly to the sub-step corresponding to the current state.
 
 4. Code review: invoke `superpowers:requesting-code-review`, then handle feedback with `superpowers:receiving-code-review`.
 
-5. **State write:** Update `activeFeature.state = "C4"` in state.json after tests are green and review is resolved.
+5. **State write:** Merge into versions tree — update `currentFeature.state = "C4"` after tests are green and review is resolved:
+   ```json
+   {
+     "versions": {
+       "<versionId>": {
+         "slices": { "<sliceId>": { "features": { "<featureId>": { "state": "C4" } } } }
+       }
+     },
+     "lastUpdated": "<ISO timestamp>",
+     "lastSkill": "colloquium:feature-implement"
+   }
+   ```
 
 ---
 
@@ -93,7 +131,7 @@ Read the spec's "External Contracts" section. If it says "None", skip:
 ℹ️  No external contracts for this feature. Skipping contract tests.
 ```
 
-Write `activeFeature.state = "C5"` immediately and proceed to sub-step C5.
+Merge into versions tree — write `currentFeature.state = "C5"` immediately and proceed to sub-step C5.
 
 **If contracts exist:**
 
@@ -110,7 +148,18 @@ Write `activeFeature.state = "C5"` immediately and proceed to sub-step C5.
 
 5. Code review: invoke `superpowers:requesting-code-review` + `superpowers:receiving-code-review`.
 
-6. **State write:** Update `activeFeature.state = "C5"` in state.json.
+6. **State write:** Merge into versions tree — update `currentFeature.state = "C5"`:
+   ```json
+   {
+     "versions": {
+       "<versionId>": {
+         "slices": { "<sliceId>": { "features": { "<featureId>": { "state": "C5" } } } }
+       }
+     },
+     "lastUpdated": "<ISO timestamp>",
+     "lastSkill": "colloquium:feature-implement"
+   }
+   ```
 
 ---
 
@@ -137,7 +186,18 @@ Write `activeFeature.state = "C5"` immediately and proceed to sub-step C5.
 
 6. Code review: invoke `superpowers:requesting-code-review` + `superpowers:receiving-code-review`.
 
-7. **State write:** Update `activeFeature.state = "C6"` in state.json.
+7. **State write:** Merge into versions tree — update `currentFeature.state = "C6"`:
+   ```json
+   {
+     "versions": {
+       "<versionId>": {
+         "slices": { "<sliceId>": { "features": { "<featureId>": { "state": "C6" } } } }
+       }
+     },
+     "lastUpdated": "<ISO timestamp>",
+     "lastSkill": "colloquium:feature-implement"
+   }
+   ```
 
 ---
 
@@ -151,7 +211,7 @@ Read the spec's "Test Strategy" section. If it includes an E2E item, proceed. If
 
 - Document why E2E automation is not appropriate in `docs/features/<BC>/<Aggregate>/spec.md` under Test Strategy
 - Add a UAT step instead: describe the manual check a human should perform
-- Write `activeFeature.state = "C7"` and display: "E2E automation skipped — UAT step added to spec."
+- Merge into versions tree — write `currentFeature.state = "C7"` and display: "E2E automation skipped — UAT step added to spec."
 
 **If E2E automation is appropriate:**
 
@@ -167,7 +227,18 @@ Read the spec's "Test Strategy" section. If it includes an E2E item, proceed. If
 
 4. All E2E tests must pass.
 
-5. **State write:** Update `activeFeature.state = "C7"` in state.json.
+5. **State write:** Merge into versions tree — update `currentFeature.state = "C7"`:
+   ```json
+   {
+     "versions": {
+       "<versionId>": {
+         "slices": { "<sliceId>": { "features": { "<featureId>": { "state": "C7" } } } }
+       }
+     },
+     "lastUpdated": "<ISO timestamp>",
+     "lastSkill": "colloquium:feature-implement"
+   }
+   ```
 
 ---
 
