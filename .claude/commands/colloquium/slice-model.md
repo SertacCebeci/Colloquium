@@ -6,11 +6,21 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeSlice.state = "B2"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
+
+   ```
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
+   ```
+
+   Then stop.
+
+   Resolve cursor: `versionId = state.activeVersion`, `currentVersion = state.versions[versionId]`. Split `state.activeSlice` on "/" → `[versionId, sliceId]`. `currentSlice = currentVersion.slices[sliceId]`.
+
+   Require `currentSlice.state = "B2"`. If not, display:
 
    ```
    ❌ Requires activeSlice.state = "B2".
-   Current state: <activeSlice.state>. Run /colloquium:slice-storm first.
+   Current state: <currentSlice.state>. Run /colloquium:slice-storm first.
    ```
 
    Then stop.
@@ -25,7 +35,7 @@
 
 ### Step 1: Read event storm
 
-Read `docs/slices/<activeSlice.id>/event-storm.md` in full. Extract:
+Extract `sliceId` from `state.activeSlice` (split on "/", take index 1). Read `docs/slices/<sliceId>/event-storm.md` in full. Extract:
 
 - Domain events → clue about aggregate states
 - Commands → methods the aggregate accepts
@@ -89,7 +99,7 @@ For each aggregate, display its complete state machine + invariant list to the u
 - If approved: proceed to next aggregate.
 - If not approved: take feedback, revise, present again. Do not write model.md until ALL aggregates are approved.
 
-### Step 6: Write `docs/slices/<activeSlice.id>/model.md`
+### Step 6: Write `docs/slices/<sliceId>/model.md`
 
 Write only after all aggregates are approved.
 
@@ -133,12 +143,16 @@ Write only after all aggregates are approved.
 
 ### Step 7: Write `.claude/sdlc/state.json`
 
-Update `activeSlice.state = "B3"`. Preserve all other fields.
+Merge into the versions tree. Preserve all other fields.
 
 ```json
 {
-  "activeSlice": {
-    "state": "B3"
+  "versions": {
+    "<activeVersion>": {
+      "slices": {
+        "<sliceId>": { "state": "B3" }
+      }
+    }
   },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:slice-model"
