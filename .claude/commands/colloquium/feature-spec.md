@@ -6,11 +6,27 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeFeature` to exist and `activeFeature.state = "C0"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
 
    ```
-   ❌ Requires activeFeature.state = "C0".
-   Current activeFeature.state: <state>.
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
+   ```
+
+   Then stop.
+
+   Resolve current context:
+   - versionId = state.activeVersion
+   - currentVersion = state.versions[versionId]
+   - Split state.activeSlice (e.g., "v1/SL-001") on "/" → [versionId, sliceId]
+   - currentSlice = currentVersion.slices[sliceId]
+   - Split state.activeFeature (e.g., "v1/SL-001/feat-006") on "/" → [versionId, sliceId, featureId]
+   - currentFeature = currentSlice.features[featureId]
+
+   Require `state.activeFeature` to be non-null and `currentFeature.state = "C0"`. If not, display:
+
+   ```
+   ❌ Requires currentFeature.state = "C0".
+   Current currentFeature.state: <currentFeature.state>.
 
    If no activeFeature is set, run /colloquium:slice-deliver to decompose the slice first.
    If the feature is already in progress, run /colloquium:feature-implement to resume.
@@ -28,13 +44,17 @@
 
 ### Step 1: Load feature context
 
-From state.json, read:
+Resolve cursor: split `state.activeFeature` (e.g., "v1/SL-001/feat-006") on "/" → versionId, sliceId, featureId.
 
-- `activeFeature.id` — e.g., `feat-001`
-- `activeFeature.name` — kebab-case name
-- `activeFeature.sliceId` — which slice this belongs to
+Read `currentFeature = state.versions[versionId].slices[sliceId].features[featureId]`.
 
-Find the matching entry in `activeSlice.featureQueue`:
+From `currentFeature`, read:
+
+- `id` — e.g., `feat-006`
+- `name` — kebab-case name
+- `bc`, `type`, `dependencies`
+
+Example `currentFeature`:
 
 ```json
 {
@@ -48,7 +68,7 @@ Find the matching entry in `activeSlice.featureQueue`:
 
 ### Step 2: Read the model
 
-Read `docs/slices/<activeFeature.sliceId>/model.md`. Find the section for this feature's aggregate (match by name and BC). Extract:
+Read `docs/slices/<sliceId>/model.md` (sliceId resolved from cursor). Find the section for this feature's aggregate (match by name and BC). Extract:
 
 - State machine (states + transitions)
 - Invariants
@@ -91,7 +111,7 @@ Create the directory if it does not exist.
 
 **Owning BC:** <BoundedContext>
 **Type:** aggregate | contract | read-model
-**Slice:** <activeFeature.sliceId>
+**Slice:** <sliceId>
 
 ## Entities
 
@@ -135,12 +155,20 @@ _(If no external contracts: "None — this feature is bounded within <BC>")_
 
 ### Step 6: Write `.claude/sdlc/state.json`
 
-Update `activeFeature.state = "C2"`. Preserve all other fields.
+Merge the feature state update into the versions tree. Preserve all other fields.
 
 ```json
 {
-  "activeFeature": {
-    "state": "C2"
+  "versions": {
+    "<versionId>": {
+      "slices": {
+        "<sliceId>": {
+          "features": {
+            "<featureId>": { "state": "C2" }
+          }
+        }
+      }
+    }
   },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:feature-spec"
