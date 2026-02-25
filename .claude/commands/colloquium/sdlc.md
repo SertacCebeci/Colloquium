@@ -32,18 +32,45 @@ Routing you to colloquium:domain-frame now...
 
 → Invoke `colloquium:domain-frame`. Stop.
 
+If `schemaVersion` is not `2` (or is missing):
+
+```
+════════════════════════════════════════════════════════════════
+▶ COLLOQUIUM SDLC — Starting fresh
+════════════════════════════════════════════════════════════════
+No SDLC session found.
+
+Starting domain discovery — the first step for any project.
+Routing you to colloquium:domain-frame now...
+════════════════════════════════════════════════════════════════
+```
+
+→ Invoke `colloquium:domain-frame`. Stop.
+
+Resolve current context:
+
+- `versionId` = `state.activeVersion`
+- `currentVersion` = `state.versions[versionId]`
+- If `state.activeSlice` is set (non-null):
+  - Split `"v1/SL-001"` on `"/"` → `[versionId, sliceId]`
+  - `currentSlice` = `currentVersion.slices[sliceId]`
+- If `state.activeFeature` is set (non-null):
+  - Split `"v1/SL-001/feat-006"` on `"/"` → `[versionId, sliceId, featureId]`
+  - `currentFeature` = `currentSlice.features[featureId]`
+
 ### Step 3: Display current position banner
 
-Display the current position based on state.json contents:
+Display the current position based on resolved state:
 
 ```
 ════════════════════════════════════════════════════════════════
 ▶ COLLOQUIUM SDLC — Current Position
 ════════════════════════════════════════════════════════════════
-Domain:         <domain.state> — <one-line summary of what A-state means>
-Active Slice:   <activeSlice.id> "<activeSlice.name>" — <activeSlice.state> (<B-state description>)
+Version:        <versionId> (<currentVersion.semver>) — <currentVersion.label> [<currentVersion.state>]
+Domain:         <currentVersion.domain.state> — <one-line summary of what A-state means>
+Active Slice:   <currentSlice.id> "<currentSlice.name>" — <currentSlice.state> (<B-state description>)
                 (or: "None — no active slice")
-Active Feature: <activeFeature.id> "<activeFeature.name>" — <activeFeature.state> (<C-state description>)
+Active Feature: <currentFeature.id> "<currentFeature.name>" — <currentFeature.state> (<C-state description>)
                 (or: "None — no active feature")
 ════════════════════════════════════════════════════════════════
 Next step: <skill name>
@@ -78,27 +105,29 @@ Routing you there now...
 
 Evaluate the routing table in order (first matching condition wins):
 
-| Condition                                                            | Route to            | Announce                                                     |
-| -------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------ |
-| `domain.state` missing or `"A0"`                                     | `domain-frame`      | "Domain framing not started — beginning discovery"           |
-| `domain.state = "A1"` AND no `activeSlice`                           | `domain-subdomains` | "Domain framed — classifying subdomains"                     |
-| `domain.state = "A2"` AND no `activeSlice`                           | `domain-contexts`   | "Subdomains classified — drawing bounded contexts"           |
-| `domain.state = "A3"` AND no `activeSlice`                           | `domain-map`        | "Bounded contexts drawn — finalizing context map"            |
-| `domain.state = "A4"` AND no `activeSlice`                           | `slice-select`      | "Domain locked — select next slice"                          |
-| `domain.state = "A3"` AND `activeSlice` exists                       | `domain-map`        | "Context map in progress — resuming"                         |
-| `activeSlice.state = "B1"` AND no `activeFeature`                    | `slice-storm`       | "Slice selected — running event storm"                       |
-| `activeSlice.state = "B2"` AND no `activeFeature`                    | `slice-model`       | "Event storm complete — committing aggregate model"          |
-| `activeSlice.state = "B3"` AND no `activeFeature`                    | `slice-contracts`   | "Aggregate model approved — stabilizing contracts"           |
-| `activeSlice.state = "B4"` AND no `activeFeature`                    | `slice-deliver`     | "Contracts stable — decomposing slice"                       |
-| `activeSlice.state = "B5"` AND no `activeFeature`                    | `feature-spec`      | "Slice decomposed — specifying first feature"                |
-| `activeSlice.state = "B5"` AND all featureQueue states = `"done"`    | `slice-validate`    | "All features complete — running slice UAT"                  |
-| `activeFeature.state = "C0"`                                         | `feature-spec`      | "Feature queued — writing spec"                              |
-| `activeFeature.state = "C2"` OR `"C3"` OR `"C4"` OR `"C5"` OR `"C6"` | `feature-implement` | "Feature in progress at <C-state> — resuming implementation" |
-| `activeFeature.state = "C7"`                                         | `feature-verify`    | "Implementation complete — running UAT"                      |
-| `activeFeature.state = "F4"`                                         | `feature-integrate` | "UAT passed — integrating feature"                           |
+| Condition                                                                                               | Route to            | Announce                                                     |
+| ------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------ |
+| `currentVersion.domain.state` missing or `"A0"`                                                         | `domain-frame`      | "Domain framing not started — beginning discovery"           |
+| `currentVersion.domain.state = "A1"` AND `state.activeSlice` is null                                    | `domain-subdomains` | "Domain framed — classifying subdomains"                     |
+| `currentVersion.domain.state = "A2"` AND `state.activeSlice` is null                                    | `domain-contexts`   | "Subdomains classified — drawing bounded contexts"           |
+| `currentVersion.domain.state = "A3"` AND `state.activeSlice` is null                                    | `domain-map`        | "Bounded contexts drawn — finalizing context map"            |
+| `currentVersion.domain.state = "A4"` AND `state.activeSlice` is null                                    | `slice-select`      | "Domain locked — select next slice"                          |
+| `currentVersion.domain.state = "A3"` AND `state.activeSlice` is non-null                                | `domain-map`        | "Context map in progress — resuming"                         |
+| `currentSlice.state = "B1"` AND `state.activeFeature` is null                                           | `slice-storm`       | "Slice selected — running event storm"                       |
+| `currentSlice.state = "B2"` AND `state.activeFeature` is null                                           | `slice-model`       | "Event storm complete — committing aggregate model"          |
+| `currentSlice.state = "B3"` AND `state.activeFeature` is null                                           | `slice-contracts`   | "Aggregate model approved — stabilizing contracts"           |
+| `currentSlice.state = "B4"` AND `state.activeFeature` is null                                           | `slice-deliver`     | "Contracts stable — decomposing slice"                       |
+| `currentSlice.state = "B5"` AND `state.activeFeature` is null                                           | `feature-spec`      | "Slice decomposed — specifying first feature"                |
+| `currentSlice.state = "B5"` AND all non-removed features in `currentSlice.features` have state `"done"` | `slice-validate`    | "All features complete — running slice UAT"                  |
+| `currentFeature.state = "C0"`                                                                           | `feature-spec`      | "Feature queued — writing spec"                              |
+| `currentFeature.state = "C2"` OR `"C3"` OR `"C4"` OR `"C5"` OR `"C6"`                                   | `feature-implement` | "Feature in progress at <C-state> — resuming implementation" |
+| `currentFeature.state = "C7"`                                                                           | `feature-verify`    | "Implementation complete — running UAT"                      |
+| `currentFeature.state = "F4"`                                                                           | `feature-integrate` | "UAT passed — integrating feature"                           |
 
-**Edge case:** If `activeSlice.state = "B5"` AND `activeFeature` is set AND its state is not "done":
-→ Check `activeFeature.state` against the feature routing rows above.
+**"All non-removed" check:** Build the feature list via `currentSlice.featureOrder.map(id => currentSlice.features[id])`. Filter out any feature whose `history` contains an entry with `type: "removed"`. All remaining features must have `state = "done"` to route to `slice-validate`.
+
+**Edge case:** If `currentSlice.state = "B5"` AND `state.activeFeature` is non-null AND `currentFeature.state` is not `"done"`:
+→ Check `currentFeature.state` against the feature routing rows above.
 
 ### Step 5: Invoke the target skill
 
