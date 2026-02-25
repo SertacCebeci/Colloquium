@@ -6,11 +6,25 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeFeature.state = "C7"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
+
+   ```
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
+   ```
+
+   Then stop.
+
+   Resolve current context:
+   - versionId = state.activeVersion
+   - currentVersion = state.versions[versionId]
+   - Split state.activeFeature ("v1/SL-001/feat-006") on "/" → [versionId, sliceId, featureId]
+   - currentFeature = currentVersion.slices[sliceId].features[featureId]
+
+   Require `currentFeature.state = "C7"`. If not, display:
 
    ```
    ❌ Requires activeFeature.state = "C7".
-   Current state: <activeFeature.state>.
+   Current state: <currentFeature.state>.
 
    If the feature is still being implemented, run /colloquium:feature-implement first.
    ```
@@ -27,7 +41,11 @@
 
 ### Step 1: Load feature context
 
-From state.json, read `activeFeature.id`, `activeFeature.name`, `activeFeature.sliceId`.
+Resolve cursor: split `state.activeFeature` ("v1/SL-001/feat-006") on "/" → [versionId, sliceId, featureId].
+
+Read `currentFeature = state.versions[versionId].slices[sliceId].features[featureId]`.
+
+From `currentFeature`, read: `id`, `name`, `bc`.
 
 Read the feature spec at `docs/features/<bc>/<aggregate>/spec.md`. Extract the "Test Strategy" section — specifically the E2E items (or UAT steps added during `feature-implement` for complex UIs).
 
@@ -54,7 +72,20 @@ Observed: <what actually happened>
 Then:
 
 - Do NOT write `uat.md`
-- Set `activeFeature.state = "C6"` in state.json
+- Write to state.json (merge into versions tree):
+  ```json
+  {
+    "versions": {
+      "<versionId>": {
+        "slices": {
+          "<sliceId>": {
+            "features": { "<featureId>": { "state": "C6" } }
+          }
+        }
+      }
+    }
+  }
+  ```
 - Display: "Routing back to feature-implement at sub-step C5→C6 (adapters). Run /colloquium:feature-implement to resume."
 - Stop.
 
@@ -78,7 +109,7 @@ Ask via AskUserQuestion. If the user says no: stop and route back to `feature-im
 
 ### Step 4: Regression on all previously verified features
 
-Read `completedFeatures[]` from state.json (set by `feature-integrate`). For each previously completed feature:
+Read `currentVersion.completedFeatures` from state.json (set by `feature-integrate`). For each previously completed feature:
 
 1. Read its `docs/features/<bc>/<aggregate>/uat.md` to find its golden path steps
 2. Re-run the first (most critical) step of that feature's UAT via Playwright MCP
@@ -108,7 +139,7 @@ Write only after UAT pass + log check + regression check all succeed.
 **Result:** PASS
 **Date:** <today's date>
 **Feature:** <feat-id> — <name>
-**Slice:** <activeFeature.sliceId>
+**Slice:** <sliceId>
 
 ## Steps Executed
 
@@ -135,12 +166,18 @@ _(If no previous features: "First feature — no regressions to check")_
 
 ### Step 6: Write `.claude/sdlc/state.json`
 
-Update `activeFeature.state = "F4"`. Preserve all other fields.
+Merge into the versions tree. Do not overwrite other fields.
 
 ```json
 {
-  "activeFeature": {
-    "state": "F4"
+  "versions": {
+    "<versionId>": {
+      "slices": {
+        "<sliceId>": {
+          "features": { "<featureId>": { "state": "F4" } }
+        }
+      }
+    }
   },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:feature-verify"
