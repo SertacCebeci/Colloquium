@@ -15,7 +15,16 @@
 
    Then stop.
 
-2. **Gate:** At least one subdomain must be classified as Core before writing state.json. A domain with zero Core subdomains cannot proceed.
+2. **Domain lock guard:** After resolving `currentVersion`, check `currentVersion.domain.locked`. If `true`, display:
+
+   ```
+   ❌ Domain discovery is permanently closed (domain.locked = true in version <activeVersion>).
+   To override, manually set versions.<activeVersion>.domain.locked to false in .claude/sdlc/state.json.
+   ```
+
+   Then stop.
+
+3. **Gate:** At least one subdomain must be classified as Core before writing state.json. A domain with zero Core subdomains cannot proceed.
 
 ---
 

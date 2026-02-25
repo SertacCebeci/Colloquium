@@ -6,10 +6,10 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `domain.state = "A3"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. Resolve `currentVersion = state.versions[state.activeVersion]`. Require `currentVersion.domain.state = "A3"`. If not, display:
 
    ```
-   ❌ Requires domain.state = "A3". Current state: <state>.
+   ❌ Requires domain.state = "A3". Current state: <currentVersion.domain.state>.
    Run /colloquium:domain-contexts first.
    ```
 
@@ -17,11 +17,21 @@
 
 2. **Hard gate:** Present the draft context map to the user and wait for explicit approval before writing either output file.
 
-3. **Final lock:** After writing A4, set `domainLocked: true` in state.json. Any subsequent attempt to run any A-layer skill (`domain-frame`, `domain-subdomains`, `domain-contexts`, `domain-map`) must display:
+3. **Final lock:** After writing A4, set `versions.<activeVersion>.domain.locked = true` in state.json. Any subsequent attempt to run any A-layer skill must resolve the current version's domain and check `locked`. If `true`, display:
+
    ```
-   ❌ Domain discovery is permanently closed (domainLocked: true).
-   To override, manually delete the domainLocked field from .claude/sdlc/state.json.
+   ❌ Domain discovery is permanently closed (domain.locked = true in version <activeVersion>).
+   To override, manually set versions.<activeVersion>.domain.locked to false in .claude/sdlc/state.json.
    ```
+
+   Then stop. All A-layer skills must add this check at top (after schemaVersion check): if `currentVersion.domain.locked = true`, display the error and stop.
+
+4. **Domain lock guard:** After resolving `currentVersion`, check `currentVersion.domain.locked`. If `true`, display:
+   ```
+   ❌ Domain discovery is permanently closed (domain.locked = true in version <activeVersion>).
+   To override, manually set versions.<activeVersion>.domain.locked to false in .claude/sdlc/state.json.
+   ```
+   Then stop.
 
 ---
 
@@ -103,15 +113,21 @@ Set `domain.state = "A4"`, append `"A3"` to `domain.completed`, and set `domainL
 
 ```json
 {
-  "domain": {
-    "state": "A4",
-    "completed": ["A0", "A1", "A2", "A3"]
+  "versions": {
+    "<activeVersion>": {
+      "domain": {
+        "state": "A4",
+        "completed": ["A0", "A1", "A2", "A3"],
+        "locked": true
+      }
+    }
   },
-  "domainLocked": true,
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:domain-map"
 }
 ```
+
+Merge into versions tree. Do not overwrite other fields.
 
 ### Step 7: Display completion banner
 
@@ -121,7 +137,7 @@ Set `domain.state = "A4"`, append `"A3"` to `domain.completed`, and set `domainL
 ════════════════════════════════════════════════════════════════
 docs/domain/context-map.md      ✅
 docs/domain/delivery-shape.md   ✅
-Domain locked (domainLocked: true)
+Domain locked (versions.<activeVersion>.domain.locked = true)
 
 Next: /colloquium:slice-select
 ════════════════════════════════════════════════════════════════

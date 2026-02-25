@@ -15,9 +15,18 @@
 
    Then stop.
 
-2. **Hard gate:** Present the draft bounded context map to the user and wait for explicit approval before writing `bounded-contexts.md`. Writing to disk without approval is not permitted.
+2. **Domain lock guard:** After resolving `currentVersion`, check `currentVersion.domain.locked`. If `true`, display:
 
-3. If any BC boundary is unclear, run targeted Q&A before proceeding — this is not skippable.
+   ```
+   ❌ Domain discovery is permanently closed (domain.locked = true in version <activeVersion>).
+   To override, manually set versions.<activeVersion>.domain.locked to false in .claude/sdlc/state.json.
+   ```
+
+   Then stop.
+
+3. **Hard gate:** Present the draft bounded context map to the user and wait for explicit approval before writing `bounded-contexts.md`. Writing to disk without approval is not permitted.
+
+4. If any BC boundary is unclear, run targeted Q&A before proceeding — this is not skippable.
 
 ---
 

@@ -19,9 +19,18 @@
 
    Then stop. Do not proceed.
 
-2. **File-first rule:** Both output files MUST exist on disk before `state.json` is written. Verify with a directory listing after writing each file.
+2. **Domain lock guard:** (Skip if this is a fresh project with no state.json.) After resolving `currentVersion`, check `currentVersion.domain.locked`. If `true`, display:
 
-3. **State write order:** Write `glossary.md` → write `framing.md` → verify both exist → THEN write `state.json`. Never reverse this order.
+   ```
+   ❌ Domain discovery is permanently closed (domain.locked = true in version <activeVersion>).
+   To override, manually set versions.<activeVersion>.domain.locked to false in .claude/sdlc/state.json.
+   ```
+
+   Then stop.
+
+3. **File-first rule:** Both output files MUST exist on disk before `state.json` is written. Verify with a directory listing after writing each file.
+
+4. **State write order:** Write `glossary.md` → write `framing.md` → verify both exist → THEN write `state.json`. Never reverse this order.
 
 ---
 
