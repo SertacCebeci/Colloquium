@@ -64,5 +64,7 @@ Write to `docs/policies/PL-<n>-<kebab-name>.md`:
 ✅ Policy created — PL-<n>: <Policy Name>
 ════════════════════════════════════════════════════════════════
 File: docs/policies/PL-<n>-<kebab-name>.md
+
+Next: /colloquium:sdlc  (to resume the SDLC at the current step)
 ════════════════════════════════════════════════════════════════
 ```
