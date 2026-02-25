@@ -6,7 +6,7 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `domain.state = "A4"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. Resolve `currentVersion = state.versions[state.activeVersion]`. Require `currentVersion.domain.state = "A4"` AND `currentVersion.domain.locked = true`. If not, display:
 
    ```
    ❌ Requires domain.state = "A4" (domain complete and locked).
@@ -15,15 +15,15 @@
 
    Then stop.
 
-2. **Active slice guard:** If `activeSlice` already exists in state.json, display:
+2. **Active slice guard:** If `state.activeSlice` is non-null, resolve `currentSlice = currentVersion.slices[sliceId]`. Display:
 
    ```
-   ⚠️  Active slice already exists: <activeSlice.id> "<activeSlice.name>" (state: <activeSlice.state>)
+   ⚠️  Active slice already exists: <currentSlice.id> "<currentSlice.name>" (state: <currentSlice.state>)
    ```
 
    Then ask via AskUserQuestion: "Complete the active slice first, or abandon it and start a new one?"
    - If "complete first": stop and say "Resume with /colloquium:sdlc"
-   - If "abandon": remove `activeSlice` and `activeFeature` from state.json, then proceed.
+   - If "abandon": set `state.activeSlice = null` and `state.activeFeature = null` in state.json. Do NOT delete the slice entry from `versions[versionId].slices` — it is preserved for audit. Then proceed.
 
 3. **Metric vagueness check:** Success metrics that are vague (e.g., "feels fast", "works well", "users are happy", "it's good enough") are rejected. Re-ask until a measurable metric is provided.
 
@@ -33,7 +33,7 @@
 
 ### Step 1: Auto-assign slice ID
 
-Scan `docs/slices/` for existing directories matching `SL-NNN`. Extract the highest existing N. Assign N+1. If no slices exist, start at SL-001.
+Scan `currentVersion.slices` for existing keys matching `SL-NNN`. Extract the highest existing N. Assign N+1. If `slices` is empty or has no SL-NNN keys, start at SL-001.
 
 Create the directory `docs/slices/SL-<n>/` now.
 
@@ -78,16 +78,24 @@ If any check fails, re-ask the relevant question before proceeding.
 
 ### Step 5: Write `.claude/sdlc/state.json`
 
-Add `activeSlice` to state.json. Preserve all other fields.
+Set `activeSlice` cursor and add slice entry to version tree. Merge — preserve all other fields.
 
 ```json
 {
-  "activeSlice": {
-    "id": "SL-<n>",
-    "name": "<kebab-name>",
-    "state": "B1",
-    "contracts": [],
-    "featureQueue": []
+  "activeSlice": "<activeVersion>/SL-<n>",
+  "versions": {
+    "<activeVersion>": {
+      "slices": {
+        "SL-<n>": {
+          "id": "SL-<n>",
+          "name": "<kebab-name>",
+          "state": "B1",
+          "contracts": [],
+          "featureOrder": [],
+          "features": {}
+        }
+      }
+    }
   },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:slice-select"
