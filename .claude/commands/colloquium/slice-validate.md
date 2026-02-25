@@ -6,16 +6,30 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeSlice.state = "B5"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
 
    ```
-   ❌ Requires activeSlice.state = "B5".
-   Current state: <activeSlice.state>. Complete slice decomposition first.
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
    ```
 
    Then stop.
 
-2. **Hard gate (pre-check):** Read `activeSlice.featureQueue` from state.json. Every feature must have `state: "done"`. If any feature is not done, display:
+   Resolve current context:
+   - versionId = state.activeVersion
+   - currentVersion = state.versions[versionId]
+   - Split state.activeSlice ("v1/SL-001") on "/" → [versionId, sliceId]
+   - currentSlice = currentVersion.slices[sliceId]
+
+   Require `currentSlice.state = "B5"`. If not, display:
+
+   ```
+   ❌ Requires activeSlice.state = "B5".
+   Current state: <currentSlice.state>. Complete slice decomposition first.
+   ```
+
+   Then stop.
+
+2. **Hard gate (pre-check):** Resolve cursor. Get active features: `currentSlice.featureOrder.map(id => currentSlice.features[id])`, filtered to exclude entries where `history` contains `{ type: "removed" }`. Every remaining feature must have `state: "done"`. If any feature is not done, display:
 
    ```
    ❌ Not all features are complete. Cannot run UAT.
@@ -36,11 +50,11 @@
 
 ### Step 1: Pre-check feature queue
 
-Read `activeSlice.featureQueue` from state.json. Confirm every entry has `state: "done"`. If not, display the hard gate error from Enforcement Rule 2.
+Resolve cursor. Get active features: `currentSlice.featureOrder.map(id => currentSlice.features[id])`, filtering out tombstoned entries (where `history` contains `{ type: "removed" }`). Confirm every remaining entry has `state: "done"`. If not, display the hard gate error from Enforcement Rule 2.
 
 ### Step 2: Read the slice user journey
 
-Read `docs/slices/<activeSlice.id>/slice.md`. Extract the complete user journey — this is the UAT script.
+Read `docs/slices/<sliceId>/slice.md`. Extract the complete user journey — this is the UAT script.
 
 ### Step 3: UAT via Playwright MCP
 
@@ -65,13 +79,13 @@ Observed: <what actually happened>
 Routing back to feature-implement for the relevant feature.
 ```
 
-Identify which feature owns the failing behavior (cross-reference with featureQueue types and names). Set that feature's state back to `"C6"` in state.json. Update `activeFeature` to point to that feature. Then stop — do not proceed.
+Identify which feature owns the failing behavior (cross-reference with `currentSlice.features` types and names). Set that feature's state back to `"C6"` in the versions tree and update `state.activeFeature` to the cursor path for that feature. Then stop — do not proceed.
 
 ### Step 4: Regression check
 
 After UAT passes for the current slice, re-run the golden paths for all previously completed slices.
 
-Read `completedSlices[]` from state.json. For each completed slice ID:
+Read `currentVersion.completedSlices` from state.json. For each completed slice ID:
 
 1. Read `docs/releases/<slice-id>-public.md` to find its "What Ships" description
 2. Navigate the golden path for that slice using Playwright MCP
@@ -101,17 +115,17 @@ After regression check passes, check for new high-severity errors:
 - If user confirms they are acceptable: document them in Known Issues. Proceed.
 - If user says fix them: identify the responsible feature, route back to `feature-implement`.
 
-### Step 6: Write `docs/releases/<activeSlice.id>-public.md`
+### Step 6: Write `docs/releases/<sliceId>-public.md`
 
 Write only after all three checks (UAT, regression, log check) pass.
 
 Create `docs/releases/` if it does not exist.
 
 ```markdown
-# <activeSlice.id> Release Note
+# <sliceId> Release Note
 
 **Released:** <today's date>
-**Slice:** <activeSlice.name>
+**Slice:** <currentSlice.name>
 
 ## What Ships
 
@@ -139,17 +153,21 @@ _(If no flags were used in this slice, write: "No feature flags.")_
   _(If no flags, write: "None")_
 ```
 
-Also update `docs/releases/<activeSlice.id>-internal.md`: change `**Status:** In progress` to `**Status:** Released`.
+Also update `docs/releases/<sliceId>-internal.md`: change `**Status:** In progress` to `**Status:** Released`.
 
 ### Step 7: Write `.claude/sdlc/state.json`
 
-Remove `activeSlice` from state.json. Append the slice ID to `completedSlices[]`. Clear `activeFeature`. Preserve all other fields.
+Set `activeSlice` to null. Set `activeFeature` to null. Append the sliceId to `currentVersion.completedSlices`. Merge into versions tree — do NOT remove the slice entry from `versions[versionId].slices`. The slice data is permanently archived in the tree.
 
 ```json
 {
-  "completedSlices": ["<previous-ids>", "<activeSlice.id>"],
   "activeSlice": null,
   "activeFeature": null,
+  "versions": {
+    "<versionId>": {
+      "completedSlices": ["<previous-ids>", "<sliceId>"]
+    }
+  },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:slice-validate"
 }
@@ -159,13 +177,13 @@ Remove `activeSlice` from state.json. Append the slice ID to `completedSlices[]`
 
 ```
 ════════════════════════════════════════════════════════════════
-✅ Slice complete — <activeSlice.id>
+✅ Slice complete — <sliceId>
 ════════════════════════════════════════════════════════════════
 UAT:         PASS (<N> steps)
 Regressions: PASS (<N> previous slices checked)
 Logs:        PASS (or: <N> known issues documented)
 
-Release note: docs/releases/<id>-public.md ✅
+Release note: docs/releases/<sliceId>-public.md ✅
 
 Slice complete. Start next slice with /colloquium:slice-select
 or run /colloquium:status to review the full project state.
