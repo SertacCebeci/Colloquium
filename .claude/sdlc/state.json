@@ -1,35 +1,127 @@
 {
-  "version": 1,
-  "domain": {
-    "state": "A4",
-    "completed": ["A0", "A1", "A2", "A3"]
-  },
-  "domainLocked": true,
-  "activeSlice": {
-    "id": "SL-001",
-    "name": "channel-message-delivery",
-    "state": "B5",
-    "contracts": ["CT-001", "CT-002", "CT-003"],
-    "featureQueue": [
-      { "id": "feat-001", "name": "channel-aggregate", "bc": "Messaging", "type": "aggregate", "dependencies": [], "state": "done" },
-      { "id": "feat-002", "name": "channel-created-acl-wiring", "bc": "Messaging", "type": "contract", "dependencies": ["feat-001"], "state": "done" },
-      { "id": "feat-003", "name": "member-added-to-channel-acl-wiring", "bc": "Messaging", "type": "contract", "dependencies": ["feat-001"], "state": "done" },
-      { "id": "feat-004", "name": "channel-message-posted-event-emission", "bc": "Messaging", "type": "contract", "dependencies": ["feat-001"], "state": "done" },
-      { "id": "feat-005", "name": "channel-feed-view", "bc": "Messaging", "type": "read-model", "dependencies": ["feat-001"], "state": "done" },
-      { "id": "feat-006", "name": "channel-sequence-head", "bc": "Messaging", "type": "read-model", "dependencies": ["feat-001"], "state": "C0" },
-      { "id": "feat-007", "name": "messages-since-seq", "bc": "Messaging", "type": "read-model", "dependencies": ["feat-001", "feat-006"], "state": "C0" },
-      { "id": "feat-008", "name": "websocket-session-aggregate", "bc": "Messaging", "type": "aggregate", "dependencies": ["feat-001", "feat-006", "feat-007"], "state": "C0" },
-      { "id": "feat-009", "name": "active-sessions-for-channel", "bc": "Messaging", "type": "read-model", "dependencies": ["feat-008"], "state": "C0" }
-    ]
-  },
-  "activeFeature": {
-    "id": "feat-006",
-    "name": "channel-sequence-head",
-    "state": "C7",
-    "sliceId": "SL-001"
-  },
-  "completedSlices": [],
-  "completedFeatures": ["feat-001", "feat-002", "feat-003", "feat-004", "feat-005"],
+  "schemaVersion": 2,
+  "activeVersion": "v1",
+  "activeSlice": "v1/SL-001",
+  "activeFeature": "v1/SL-001/feat-006",
   "lastUpdated": "2026-02-25T18:50:00.000Z",
-  "lastSkill": "colloquium:feature-implement"
+  "lastSkill": "colloquium:feature-implement",
+  "versions": {
+    "v1": {
+      "id": "v1",
+      "label": "Messaging Core",
+      "type": "milestone",
+      "state": "active",
+      "semver": "1.0.0",
+      "parentVersion": null,
+      "domain": {
+        "state": "A4",
+        "completed": ["A0", "A1", "A2", "A3"],
+        "locked": true
+      },
+      "completedSlices": [],
+      "completedFeatures": ["feat-001", "feat-002", "feat-003", "feat-004", "feat-005"],
+      "slices": {
+        "SL-001": {
+          "id": "SL-001",
+          "name": "channel-message-delivery",
+          "state": "B5",
+          "contracts": ["CT-001", "CT-002", "CT-003"],
+          "featureOrder": [
+            "feat-001",
+            "feat-002",
+            "feat-003",
+            "feat-004",
+            "feat-005",
+            "feat-006",
+            "feat-007",
+            "feat-008",
+            "feat-009"
+          ],
+          "features": {
+            "feat-001": {
+              "id": "feat-001",
+              "name": "channel-aggregate",
+              "bc": "Messaging",
+              "type": "aggregate",
+              "dependencies": [],
+              "state": "done",
+              "history": []
+            },
+            "feat-002": {
+              "id": "feat-002",
+              "name": "channel-created-acl-wiring",
+              "bc": "Messaging",
+              "type": "contract",
+              "dependencies": ["feat-001"],
+              "state": "done",
+              "history": []
+            },
+            "feat-003": {
+              "id": "feat-003",
+              "name": "member-added-to-channel-acl-wiring",
+              "bc": "Messaging",
+              "type": "contract",
+              "dependencies": ["feat-001"],
+              "state": "done",
+              "history": []
+            },
+            "feat-004": {
+              "id": "feat-004",
+              "name": "channel-message-posted-event-emission",
+              "bc": "Messaging",
+              "type": "contract",
+              "dependencies": ["feat-001"],
+              "state": "done",
+              "history": []
+            },
+            "feat-005": {
+              "id": "feat-005",
+              "name": "channel-feed-view",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-001"],
+              "state": "done",
+              "history": []
+            },
+            "feat-006": {
+              "id": "feat-006",
+              "name": "channel-sequence-head",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-001"],
+              "state": "C7",
+              "history": []
+            },
+            "feat-007": {
+              "id": "feat-007",
+              "name": "messages-since-seq",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-001", "feat-006"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-008": {
+              "id": "feat-008",
+              "name": "websocket-session-aggregate",
+              "bc": "Messaging",
+              "type": "aggregate",
+              "dependencies": ["feat-001", "feat-006", "feat-007"],
+              "state": "C0",
+              "history": []
+            },
+            "feat-009": {
+              "id": "feat-009",
+              "name": "active-sessions-for-channel",
+              "bc": "Messaging",
+              "type": "read-model",
+              "dependencies": ["feat-008"],
+              "state": "C0",
+              "history": []
+            }
+          }
+        }
+      }
+    }
+  }
 }
