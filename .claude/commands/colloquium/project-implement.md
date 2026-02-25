@@ -72,10 +72,9 @@ Read `.claude/projects/<slug>/project-state.json`.
 
 If `frontendPackage`, `apiPackage`, or `frontendPort` are **missing** from `project-state.json`, run this one-time migration before continuing:
 
-1. Run: `cat apps/<slug>/package.json` → read the `"name"` field → this is `frontendPackage`
-2. Run: `cat apps/<slug>-api/package.json` → read the `"name"` field → this is `apiPackage`
-3. Run: `cat apps/<slug>/package.json` → read the `"dev"` script → extract `--port NNNN` → this is `frontendPort` (default `5173` if no explicit flag)
-4. Write all three values into `project-state.json`
+1. Run: `cat apps/<slug>/package.json` → read the `"name"` field → this is `frontendPackage`; also read the `"dev"` script → extract `--port NNNN` → this is `frontendPort` (default `5173` if no explicit flag)
+2. If `apps/<slug>-api/` exists: run `cat apps/<slug>-api/package.json` → read the `"name"` field → this is `apiPackage`. If no `-api` app exists: set `apiPackage` to `null`.
+3. Merge all derived values into the existing `project-state.json` — update only the missing keys, do NOT overwrite other existing keys (`passingTests`, `currentTestIndex`, `sessionCount`, etc.).
 
 This migration runs once per existing project, never again once the fields exist.
 
@@ -104,10 +103,10 @@ Session:      #[sessionCount + 1]
 ### Step 3 — Start dev servers
 
 ```bash
-pnpm turbo dev --filter=<frontendPackage> --filter=<apiPackage>
+pnpm turbo dev --filter=<frontendPackage> [--filter=<apiPackage> if apiPackage is not null]
 ```
 
-Wait for both apps to report "ready" in log output before proceeding.
+Wait for all started apps to report "ready" in log output before proceeding.
 
 ---
 
@@ -116,11 +115,11 @@ Wait for both apps to report "ready" in log output before proceeding.
 **4a — Vitest suite:**
 
 ```bash
-pnpm turbo test --filter=<apiPackage>
+pnpm turbo test --filter=<apiPackage>   # skip if apiPackage is null (frontend-only project)
 ```
 
 - All green → proceed to 4b
-- Any red → **STOP.** Fix the failing test, commit the fix (`fix(<slug>): restore [description]`), re-run until all green. Only then proceed to 4b.
+- Any red → **STOP.** Fix the failing test, commit the fix (`fix(<slug>): restore [description]`), re-run. Repeat until all green, then proceed to 4b. If unable to fix within 3 attempts: display a banner identifying the failing tests and ask the human whether to continue with the known regression or abort the session.
 
 **4b — Browser smoke check:**
 
