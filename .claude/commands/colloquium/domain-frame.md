@@ -6,11 +6,15 @@
 
 ## Enforcement Rules
 
-1. **Re-run guard:** Read `.claude/sdlc/state.json`. If `domain.state` exists and is not `"A0"` (i.e., the domain has already been framed or is further along), display:
+1. **Re-run guard:** Read `.claude/sdlc/state.json`.
+
+   If the file does not exist or `schemaVersion` is missing → this is a fresh project. Proceed to Step 1 (will create v2 state.json).
+
+   If `schemaVersion = 2`: resolve `currentVersion = state.versions[state.activeVersion]`. If `currentVersion.domain.state` exists and is not `"A0"`, display:
 
    ```
-   ❌ Domain framing already completed (domain.state = "<current state>").
-   To redo framing, manually reset domain.state to "A0" in .claude/sdlc/state.json.
+   ❌ Domain framing already completed (domain.state = "<currentVersion.domain.state>").
+   To redo framing, manually reset versions.<activeVersion>.domain.state to "A0" in .claude/sdlc/state.json.
    ```
 
    Then stop. Do not proceed.
@@ -90,23 +94,55 @@ Confirm `docs/domain/glossary.md` and `docs/domain/framing.md` both exist on dis
 
 Create `.claude/sdlc/` if it does not exist.
 
-Write (or update) `.claude/sdlc/state.json`:
+**If state.json does not exist (fresh project):** Write the full v2 structure:
 
 ```json
 {
-  "version": 1,
-  "domain": {
-    "state": "A1",
-    "completed": ["A0"]
+  "schemaVersion": 2,
+  "activeVersion": "v1",
+  "activeSlice": null,
+  "activeFeature": null,
+  "lastUpdated": "<ISO timestamp>",
+  "lastSkill": "colloquium:domain-frame",
+  "versions": {
+    "v1": {
+      "id": "v1",
+      "label": "",
+      "type": "milestone",
+      "state": "active",
+      "semver": "1.0.0",
+      "parentVersion": null,
+      "domain": {
+        "state": "A1",
+        "completed": ["A0"],
+        "locked": false
+      },
+      "completedSlices": [],
+      "completedFeatures": [],
+      "slices": {}
+    }
+  }
+}
+```
+
+**If state.json already exists (schemaVersion 2):** Merge — update only:
+
+```json
+{
+  "versions": {
+    "<activeVersion>": {
+      "domain": {
+        "state": "A1",
+        "completed": ["A0"]
+      }
+    }
   },
-  "completedSlices": [],
-  "completedFeatures": [],
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:domain-frame"
 }
 ```
 
-If `state.json` already exists with other fields (e.g., from a partial session), merge — do not overwrite unrelated fields.
+Preserve all other fields. Do not overwrite the versions tree — merge into it.
 
 ### Step 6: Display completion banner
 
