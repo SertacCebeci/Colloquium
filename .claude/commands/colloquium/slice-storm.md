@@ -6,11 +6,21 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeSlice.state = "B1"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
+
+   ```
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
+   ```
+
+   Then stop.
+
+   Resolve cursor: `versionId = state.activeVersion`, `currentVersion = state.versions[versionId]`. Split `state.activeSlice` on "/" → `[versionId, sliceId]`. `currentSlice = currentVersion.slices[sliceId]`.
+
+   Require `currentSlice.state = "B1"`. If not, display:
 
    ```
    ❌ Requires activeSlice.state = "B1".
-   Current state: <activeSlice.state>. Run /colloquium:slice-select first.
+   Current state: <currentSlice.state>. Run /colloquium:slice-select first.
    ```
 
    Then stop.
@@ -25,7 +35,7 @@
 
 ### Step 1: Read slice
 
-Read `docs/slices/<activeSlice.id>/slice.md` in full. Extract the user journey, bounded contexts, and success metric.
+Extract `sliceId` from `state.activeSlice` (split on "/", take index 1). Read `docs/slices/<sliceId>/slice.md` in full. Extract the user journey, bounded contexts, and success metric.
 
 ### Step 2: Generate all five swimlanes
 
@@ -81,7 +91,7 @@ A thin slice should have at least 10 events. Review the user journey in slice.md
 
 Do not proceed. Ask: "Should we expand the slice scope, or refine the user journey?"
 
-### Step 6: Write `docs/slices/<activeSlice.id>/event-storm.md`
+### Step 6: Write `docs/slices/<sliceId>/event-storm.md`
 
 ```markdown
 # Event Storm — <SL-n>
@@ -113,12 +123,18 @@ Do not proceed. Ask: "Should we expand the slice scope, or refine the user journ
 
 ### Step 7: Write `.claude/sdlc/state.json`
 
-Update `activeSlice.state = "B2"`. Preserve all other fields.
+Merge into the versions tree. Preserve all other fields.
 
 ```json
 {
-  "activeSlice": {
-    "state": "B2"
+  "versions": {
+    "<activeVersion>": {
+      "slices": {
+        "<sliceId>": {
+          "state": "B2"
+        }
+      }
+    }
   },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:slice-storm"
