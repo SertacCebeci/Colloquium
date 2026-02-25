@@ -1,56 +1,18 @@
-# Colloquium Project
+# Colloquium Project (DEPRECATED)
 
-Manage standalone projects inside the Colloquium monorepo.
+> ⚠️ This skill suite has been replaced by the DDD SDLC skill suite.
 
-This skill is a **dispatcher** — it routes you to the right sub-skill based on what you need to do.
+The `colloquium:project-*` skills (project-plan, project-implement) are no longer maintained.
 
----
+## New workflow
 
-## Two Sub-Skills
+Use `/colloquium:sdlc` — it reads your current state and routes you to the right step automatically.
 
-### `/colloquium:project-initiate` — Bootstrap a new project
+Or invoke skills directly:
 
-Use when you want to start a **brand-new** app from scratch.
+| Old command                     | New equivalent                                        |
+| ------------------------------- | ----------------------------------------------------- |
+| `/colloquium:project-plan`      | `/colloquium:domain-frame` (then follow the pipeline) |
+| `/colloquium:project-implement` | `/colloquium:feature-implement`                       |
 
-What it does:
-
-- Runs Q&A across 5 topic blocks (identity, tech stack, features, design, constraints)
-- Generates `app_spec.txt`, `feature_list.json` (200 tests), and `claude-progress.txt`
-- Scaffolds the monorepo directory structure and wires into Turborepo
-- Makes the initial git commit
-
----
-
-### `/colloquium:project-implement <slug>` — Implement an existing project
-
-Use when you have an already-bootstrapped project and want to make tests pass.
-
-What it does:
-
-- Runs a TDD session: one test at a time from `feature_list.json`
-- Pulls library docs via context7, runs the Red→Green cycle, runs code review
-- Verifies each test via Playwright browser automation before marking it passing
-- Persists state after every step; resumes cleanly across sessions
-
----
-
-## Quick Reference
-
-| Situation                              | Command                                |
-| -------------------------------------- | -------------------------------------- |
-| Starting a project for the first time  | `/colloquium:project-initiate`         |
-| Continuing work on an existing project | `/colloquium:project-implement`        |
-| Continuing a specific project by name  | `/colloquium:project-implement <slug>` |
-
----
-
-## State Files (per project)
-
-All state lives under `.claude/projects/<slug>/`:
-
-| File                  | Purpose                                                         |
-| --------------------- | --------------------------------------------------------------- |
-| `project-state.json`  | Machine-readable cursor and counters — written after every step |
-| `feature_list.json`   | 200 test cases, append-only except for `"passes"` field         |
-| `app_spec.txt`        | Full XML specification generated at bootstrap time              |
-| `claude-progress.txt` | Human-readable session log — appended each session              |
+**Start here:** `/colloquium:sdlc`
