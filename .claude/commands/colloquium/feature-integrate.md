@@ -6,11 +6,27 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `activeFeature.state = "F4"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. If not 2, display:
+
+   ```
+   ❌ state.json is schema v1. Run /colloquium:version --migrate first.
+   ```
+
+   Then stop.
+
+   Resolve current context:
+   - versionId = state.activeVersion
+   - currentVersion = state.versions[versionId]
+   - Split state.activeSlice ("v1/SL-001") on "/" → [versionId, sliceId]
+   - currentSlice = currentVersion.slices[sliceId]
+   - Split state.activeFeature ("v1/SL-001/feat-006") on "/" → [versionId, sliceId, featureId]
+   - currentFeature = currentSlice.features[featureId]
+
+   Require `currentFeature.state = "F4"`. If not, display:
 
    ```
    ❌ Requires activeFeature.state = "F4".
-   Current state: <activeFeature.state>.
+   Current state: <currentFeature.state>.
 
    Feature must pass UAT (feature-verify) before integration.
    ```
@@ -27,20 +43,23 @@
 
 ### Step 1: Load context
 
-From state.json, read `activeFeature`, `activeSlice`.
+Resolve cursor: split `state.activeFeature` ("v1/SL-001/feat-006") on "/" → [versionId, sliceId, featureId].
+
+Read `currentFeature = state.versions[versionId].slices[sliceId].features[featureId]`.
+Read `currentSlice = state.versions[versionId].slices[sliceId]`.
 
 Read:
 
-- `docs/features/<bc>/<aggregate>/spec.md` — External Contracts section
+- `docs/features/<bc>/<aggregate>/spec.md` — External Contracts section (bc and aggregate from `currentFeature.bc` and `currentFeature.name`)
 - `docs/features/<bc>/<aggregate>/uat.md` — to understand what was actually built
-- `docs/slices/<activeSlice.id>/model.md` — full event model for wiring context
-- `activeSlice.featureQueue` — to find upstream and downstream features
+- `docs/slices/<sliceId>/model.md` — full event model for wiring context
+- Active features list: `currentSlice.featureOrder.map(id => currentSlice.features[id])` — to find upstream and downstream features. Filter out entries where `history` contains `{ type: "removed" }`.
 
 ### Step 2: Integration checklist — item 1: Upstream wiring
 
 Check whether events from upstream features in the queue are consumed correctly by this feature.
 
-Find all features that this feature depends on (check `dependencies` in `activeFeature`'s featureQueue entry). For each dependency:
+Find all features that this feature depends on (check `dependencies` in `currentFeature`). For each dependency:
 
 - Read its spec to see what events it emits
 - Verify that this feature's implementation (per the uat.md) correctly consumes those events
@@ -54,7 +73,7 @@ If this feature has no dependencies: write "N/A — no upstream dependencies."
 
 Check whether events emitted by this feature are consumed by downstream features in the queue.
 
-Scan `activeSlice.featureQueue` for features that list this feature in their `dependencies`. For each downstream feature:
+Scan `currentSlice.featureOrder` for features that list this feature in their `dependencies`. For each downstream feature (looking up each via `currentSlice.features[id]`, skipping tombstoned entries):
 
 - Check if it is already implemented (state > C0): if yes, confirm its implementation consumes this feature's events
 - If not yet implemented (state = C0): document it as "pending wiring" — the downstream feature's spec should account for this
@@ -114,18 +133,26 @@ If no feature flags were introduced: write "N/A — no feature flags in this fea
 
 ### Step 6: Write `.claude/sdlc/state.json`
 
-- Set this feature's state to `"done"` in `activeSlice.featureQueue`
-- Clear `activeFeature`
-- Append this feat-ID to `completedFeatures[]`
-- Preserve all other fields
+- Set this feature's state to `"done"` in the versions tree
+- Clear `activeFeature` (set to null)
+- Append this feat-ID to `currentVersion.completedFeatures`
+- Merge into versions tree; preserve all other fields
 
 ```json
 {
-  "activeSlice": {
-    "featureQueue": [{ "id": "feat-001", "state": "done" }]
-  },
   "activeFeature": null,
-  "completedFeatures": ["feat-001"],
+  "versions": {
+    "<versionId>": {
+      "completedFeatures": ["<all previous>", "<featureId>"],
+      "slices": {
+        "<sliceId>": {
+          "features": {
+            "<featureId>": { "state": "done" }
+          }
+        }
+      }
+    }
+  },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:feature-integrate"
 }
@@ -133,21 +160,20 @@ If no feature flags were introduced: write "N/A — no feature flags in this fea
 
 ### Step 7: Advance the feature queue
 
-After state is written, check `activeSlice.featureQueue` for features with `state: "C0"`:
+After state is written, scan `currentSlice.featureOrder` in order. For each candidate featureId:
 
-**If next C0 feature exists:**
+1. Check `currentSlice.features[featureId].state` — if not `"C0"`, skip.
+2. Check `currentSlice.features[featureId].history` — if contains `{ type: "removed" }`, skip (tombstoned).
+3. Check all `dependencies` are in `currentVersion.completedFeatures` — if not all done, skip.
+4. First feature passing all three checks: set `state.activeFeature = "<versionId>/<sliceId>/<featureId>"`. Write to state.json.
 
-Set `activeFeature` to the next C0 feature in queue order. Check that all its dependencies are done. If dependencies are not done yet, skip to the next C0 feature whose dependencies are satisfied.
+**If no feature passes (queue exhausted):**
 
-Write the new `activeFeature` to state.json.
-
-**If no C0 feature exists (queue exhausted):**
-
-All features are done. Display:
+All non-removed features are done. Display:
 
 ```
 ════════════════════════════════════════════════════════════════
-✅ All features complete for <activeSlice.id>
+✅ All features complete for <sliceId>
 ════════════════════════════════════════════════════════════════
 Completed features: feat-001, feat-002, ...
 
