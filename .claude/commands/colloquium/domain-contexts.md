@@ -6,10 +6,10 @@
 
 ## Enforcement Rules
 
-1. Read `.claude/sdlc/state.json`. Require `domain.state = "A2"`. If not, display:
+1. Read `.claude/sdlc/state.json`. Verify `schemaVersion = 2`. Resolve `currentVersion = state.versions[state.activeVersion]`. Require `currentVersion.domain.state = "A2"`. If not, display:
 
    ```
-   ❌ Requires domain.state = "A2". Current state: <state>.
+   ❌ Requires domain.state = "A2". Current state: <currentVersion.domain.state>.
    Run /colloquium:domain-subdomains first.
    ```
 
@@ -101,14 +101,20 @@ Update — set `domain.state = "A3"`, append `"A2"` to `domain.completed`. Prese
 
 ```json
 {
-  "domain": {
-    "state": "A3",
-    "completed": ["A0", "A1", "A2"]
+  "versions": {
+    "<activeVersion>": {
+      "domain": {
+        "state": "A3",
+        "completed": ["A0", "A1", "A2"]
+      }
+    }
   },
   "lastUpdated": "<ISO timestamp>",
   "lastSkill": "colloquium:domain-contexts"
 }
 ```
+
+Merge into versions tree. Do not overwrite other fields.
 
 ### Step 7: Display completion banner
 
