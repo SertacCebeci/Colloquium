@@ -447,7 +447,7 @@ Write to: `.claude/projects/<slug>/project-state.json`
 }
 ```
 
-Omit `"apiDir"` and `"apiPackage"` if no backend was created. Omit empty `"packages"` array entries.
+If no backend was created: omit `"apiDir"` from the JSON and set `"apiPackage": null` (do not omit the key — null tells `project-implement` that this is a frontend-only project). Omit empty `"packages"` array entries.
 
 ---
 
