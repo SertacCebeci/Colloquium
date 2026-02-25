@@ -95,7 +95,9 @@
       "./.claude/context",
       "./docs/plans",
       "./apps/colloquium-blog",
-      "/Users/alisertaccebeci/Colloquium/.claude/projects/colloquium-chat"
+      "/Users/alisertaccebeci/Colloquium/.claude/projects/colloquium-chat",
+      "/Users/alisertaccebeci/Colloquium/docs",
+      "/Users/alisertaccebeci/Colloquium/docs/features/Messaging"
     ]
   },
   "enabledPlugins": {

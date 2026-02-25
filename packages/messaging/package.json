@@ -1,0 +1,21 @@
+{
+  "name": "@colloquium/messaging",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@colloquium/config": "workspace:*",
+    "@colloquium/tsconfig": "workspace:*",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
