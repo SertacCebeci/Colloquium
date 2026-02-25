@@ -31,14 +31,35 @@ Run /colloquium:sdlc to begin.
 
 Then stop. Do not proceed.
 
-### Step 2: Read supporting artifacts
+Verify `schemaVersion = 2`. If not 2, display:
+
+```
+❌ state.json is schema v1. Run /colloquium:version --migrate first.
+```
+
+Then stop.
+
+### Step 2: Resolve cursor
+
+Resolve current context from the v2 schema:
+
+- `versionId` = `state.activeVersion`
+- `currentVersion` = `state.versions[versionId]`
+- If `state.activeSlice` is set (non-null):
+  - Split `"v1/SL-001"` on `"/"` → `[versionId, sliceId]`
+  - `currentSlice` = `currentVersion.slices[sliceId]`
+- If `state.activeFeature` is set (non-null):
+  - Split `"v1/SL-001/feat-006"` on `"/"` → `[versionId, sliceId, featureId]`
+  - `currentFeature` = `currentSlice.features[featureId]`
+
+### Step 3: Read supporting artifacts
 
 Read the following files (if they exist — skip gracefully if missing):
 
 - `docs/domain/bounded-contexts.md` — for BC names and count
 - `docs/policies/` directory listing — for policy count
 
-### Step 3: Build and display the status banner
+### Step 4: Build and display the status banner
 
 Construct the banner with all sections below, in order. For any section where data is missing, display `—` rather than erroring.
 
@@ -46,15 +67,19 @@ Construct the banner with all sections below, in order. For any section where da
 ════════════════════════════════════════════════════════════════
 ▶ COLLOQUIUM SDLC STATUS
 ════════════════════════════════════════════════════════════════
-Domain:    <domain.state> — <one-line description of what that state means>
+Version:   <versionId> (<currentVersion.semver>) — <currentVersion.label> [<currentVersion.state>]
+           <for each version in state.versions with state "released", list: ✓ <id> (<semver>) — <label>>
+
+Domain:    <currentVersion.domain.state> — <one-line description of what that state means>
            <N> bounded contexts: <comma-separated BC names from bounded-contexts.md>
 
-Slices:    <list completed slices from completedSlices[] with ✓ prefix>
-           <activeSlice.id> "<activeSlice.name>" ► active — <activeSlice.state> (<N> features queued)
+Slices:    <list completed slices from currentVersion.completedSlices with ✓ prefix>
+           <currentSlice.id> "<currentSlice.name>" ► active — <currentSlice.state> (<N> features queued)
 
-Features:  <list from activeSlice.featureQueue:>
+Features:  <build list: currentSlice.featureOrder.map(id => currentSlice.features[id])
+            filtered for non-removed (skip any feature whose history contains { type: "removed" })>
              ✓ <feat-id> <name>   (state = "done")
-             ► <feat-id> <name>   (state = activeFeature — currently active)
+             ► <feat-id> <name>   (state matches currentFeature — currently active)
              ○ <feat-id> <name>   (state = "C0" — queued)
 
 Policies:  <count of .md files in docs/policies/>
@@ -64,6 +89,8 @@ Flags:     <scan docs/ for any mention of feature flags — list names + promoti
 Next:  /colloquium:sdlc
 ════════════════════════════════════════════════════════════════
 ```
+
+**"Non-removed" filter:** A feature is removed if its `history` array contains any entry with `type: "removed"`. Always filter these out before building the Features list and before counting "features queued".
 
 **Domain state descriptions:**
 
@@ -93,6 +120,6 @@ Next:  /colloquium:sdlc
 - F4 = "UAT passed"
 - done = "integrated"
 
-### Step 4: Zero writes confirmed
+### Step 5: Zero writes confirmed
 
 Do not write to any file. The skill is now complete.
