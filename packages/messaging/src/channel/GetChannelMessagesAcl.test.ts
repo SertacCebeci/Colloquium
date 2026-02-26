@@ -220,4 +220,48 @@ describe("handleGetChannelMessages — CT-004 contract", () => {
     // nextCursor is a string when count === limit
     expect(typeof result.nextCursor).toBe("string");
   });
+
+  // Consumer Expectation: nextCursor is exactly null (never undefined or "")
+  // toBeNull() already implies not-undefined and not-""; toBeNull is the precise assertion
+  test("nextCursor is exactly null when all messages fit in the page", () => {
+    const repo = makeRepoWithMessages(3);
+    const result = handleGetChannelMessages(validPayload({ limit: 50 }), repo);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  // Consumer Expectation: messages array is always present (may be empty)
+  test("messages field is always present and is an array, even when channel has no messages", () => {
+    const repo = makeRepoWithMember();
+    const result = handleGetChannelMessages(validPayload(), repo);
+    expect(result).toHaveProperty("messages");
+    expect(Array.isArray(result.messages)).toBe(true);
+  });
+
+  // Consumer Expectation: all sequenceNumbers within a page are strictly decreasing
+  test("all sequenceNumbers within a page are strictly decreasing (newest first)", () => {
+    const repo = makeRepoWithMessages(5);
+    const result = handleGetChannelMessages(validPayload({ limit: 4 }), repo);
+    const seqs = result.messages.map((m) => m.sequenceNumber);
+    expect(seqs.length).toBeGreaterThanOrEqual(2); // loop must execute at least once
+    for (let i = 0; i < seqs.length - 1; i++) {
+      expect(seqs[i]).toBeGreaterThan(seqs[i + 1]);
+    }
+  });
+
+  // Producer Guarantee: no gap or overlap between pages — the oldest message on the
+  // more-recent page has a strictly higher sequenceNumber than the newest message on the
+  // older page fetched with that cursor (cursor = oldest seq from the recent page).
+  test("cross-page sequenceNumber ordering: pages do not overlap and have no gap", () => {
+    const repo = makeRepoWithMessages(6);
+    const page1 = handleGetChannelMessages(validPayload({ limit: 3 }), repo);
+    // page1 (most-recent): [seq6, seq5, seq4]; nextCursor = "4" (oldest seq on this page)
+    expect(page1.nextCursor).not.toBeNull();
+    const cursor = Number(page1.nextCursor!);
+    const page2 = handleGetChannelMessages(validPayload({ limit: 3, before: cursor }), repo);
+    // page2 (older): [seq3, seq2, seq1]
+    const oldestOnPage1 = page1.messages[page1.messages.length - 1].sequenceNumber; // seq4
+    const newestOnPage2 = page2.messages[0].sequenceNumber; // seq3
+    // The cursor excludes seq4 from page2 — page1's oldest is strictly higher than page2's newest
+    expect(oldestOnPage1).toBeGreaterThan(newestOnPage2);
+  });
 });

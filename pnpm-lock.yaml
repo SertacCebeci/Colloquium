@@ -269,6 +269,9 @@ importers:
 
   apps/reddit-clone-api:
     dependencies:
+      '@colloquium/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       '@colloquium/reddit-clone-types':
         specifier: workspace:*
         version: link:../../packages/reddit-clone-types

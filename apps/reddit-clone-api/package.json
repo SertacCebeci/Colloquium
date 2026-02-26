@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@colloquium/messaging": "workspace:*",
     "@colloquium/reddit-clone-types": "workspace:*",
     "@hono/node-server": "^1.13.0",
     "bcryptjs": "^2.4.3",
