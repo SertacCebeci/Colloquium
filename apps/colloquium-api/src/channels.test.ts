@@ -65,6 +65,18 @@ describe("GET /channels/:channelId/messages — CT-004 HTTP contract", () => {
     expect(typeof body.error).toBe("string");
   });
 
+  test("returns 401 when JWT is valid but sub claim is missing", async () => {
+    const app = makeApp();
+    // Sign a token without a sub claim — valid JWT, invalid identity
+    const tokenWithoutSub = jwt.sign({ role: "user" }, TEST_SECRET);
+    const res = await app.request("/channels/ch-test/messages", {
+      headers: { Authorization: `Bearer ${tokenWithoutSub}` },
+    });
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
   test("returns 404 when channel does not exist", async () => {
     const app = makeApp(makeRepoWithMember());
     const res = await app.request("/channels/ghost-channel/messages", {
@@ -133,6 +145,242 @@ describe("GET /channels/:channelId/messages — CT-004 HTTP contract", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as ErrorBody;
     expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 400 when before cursor is not a valid number", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages?before=abc", {
+      headers: { Authorization: `Bearer ${makeToken("user-1")}` },
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+});
+
+// ── CT-005 HTTP contract ──────────────────────────────────────────────────────
+
+type PostChannelMessageResponse = {
+  messageId: string;
+  channelId: string;
+  authorId: string;
+  content: string;
+  sequenceNumber: number;
+  postedAt: string;
+};
+
+describe("POST /channels/:channelId/messages — CT-005 HTTP contract", () => {
+  test("returns 401 when Authorization header is absent", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "hello" }),
+    });
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 401 when Bearer token is malformed", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer not.a.valid.jwt", "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "hello" }),
+    });
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 401 when JWT is valid but sub claim is missing", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const tokenWithoutSub = jwt.sign({ role: "user" }, TEST_SECRET);
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tokenWithoutSub}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "hello" }),
+    });
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 400 when request body is missing the content field", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 404 when channel does not exist", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ghost-channel/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "hello" }),
+    });
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 403 when authenticated user is not a channel member", async () => {
+    const app = makeApp(makeRepoWithMember("ch-test", "user-1"));
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("stranger")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "hello" }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 422 when content is whitespace-only", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "   " }),
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 422 when content exceeds 4000 characters", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "a".repeat(4001) }),
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as ErrorBody;
+    expect(typeof body.error).toBe("string");
+  });
+
+  test("returns 201 with all six CT-005 response fields on a valid post", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "Hello, world!" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as PostChannelMessageResponse;
+    expect(typeof body.messageId).toBe("string");
+    expect(body.channelId).toBe("ch-test");
+    expect(typeof body.authorId).toBe("string");
+    expect(body.content).toBe("Hello, world!");
+    expect(Number.isInteger(body.sequenceNumber)).toBe(true);
+    expect(body.sequenceNumber).toBeGreaterThanOrEqual(1);
+    expect(typeof body.postedAt).toBe("string");
+  });
+
+  test("authorId in 201 response matches JWT sub — not overridable by request body", async () => {
+    const app = makeApp(makeRepoWithMember("ch-test", "user-1"));
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "authored message" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as PostChannelMessageResponse;
+    expect(body.authorId).toBe("user-1");
+  });
+
+  test("postedAt in 201 response is a valid ISO 8601 UTC string (not a Unix timestamp)", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "timestamp test" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as PostChannelMessageResponse;
+    // ISO 8601 string — must parse to a valid date, must NOT be a number
+    expect(typeof body.postedAt).toBe("string");
+    expect(Number.isNaN(Date.parse(body.postedAt))).toBe(false);
+    // Not a Unix timestamp (which would be a large integer as string, e.g. "1700000000000")
+    expect(body.postedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  test("sequenceNumber in 201 response is a number (not string) — CT-005 field rename from domain seq", async () => {
+    const app = makeApp(makeRepoWithMember());
+    const res = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "seq rename test" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as Record<string, unknown>;
+    // CT-005 requires 'sequenceNumber' — the domain uses 'seq' internally
+    expect("sequenceNumber" in body).toBe(true);
+    expect("seq" in body).toBe(false);
+    expect(typeof body.sequenceNumber).toBe("number");
+  });
+});
+
+// ── CT-005 integration: POST then GET round-trip ──────────────────────────────
+
+describe("POST /channels/:channelId/messages — integration round-trip", () => {
+  test("posted message appears at top of GET feed (sequenceNumber is greatest in channel)", async () => {
+    const repo = makeRepoWithMessages(3);
+    const app = makeApp(repo);
+
+    const postRes = await app.request("/channels/ch-test/messages", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${makeToken("user-1")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: "new message" }),
+    });
+    expect(postRes.status).toBe(201);
+    const posted = (await postRes.json()) as PostChannelMessageResponse;
+    expect(posted.sequenceNumber).toBe(4); // 3 seeded + 1 new
+
+    const getRes = await app.request("/channels/ch-test/messages", {
+      headers: { Authorization: `Bearer ${makeToken("user-1")}` },
+    });
+    const feed = (await getRes.json()) as ChannelFeedPageV1;
+    expect(feed.messages[0].sequenceNumber).toBe(4);
+    expect(feed.messages[0].content).toBe("new message");
   });
 });
 

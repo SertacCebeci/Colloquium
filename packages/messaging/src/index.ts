@@ -21,6 +21,15 @@ export type { ChannelEventStore } from "./channel/ChannelRepository";
 export { queryChannelFeed } from "./channel/ChannelFeedView";
 export type { ChannelFeedPayload } from "./channel/ChannelFeedView";
 export { handleGetChannelMessages } from "./channel/GetChannelMessagesAcl";
+export { MessageComposer } from "./channel/MessageComposer";
+export type {
+  ComposerEvent,
+  EmptyMessageRejected,
+  PostMessageAPICallMade,
+  MessageAppendedOptimistically,
+  MessageInputCleared,
+  ComposerAPIErrorOccurred,
+} from "./channel/MessageComposer";
 export type {
   GetChannelMessagesPayload,
   MessageItem,

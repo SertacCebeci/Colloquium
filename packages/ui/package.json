@@ -16,6 +16,8 @@
   "dependencies": {
     "@colloquium/types": "workspace:*",
     "@colloquium/utils": "workspace:*",
+    "@colloquium/messaging": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",

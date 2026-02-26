@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "activeVersion": "v1",
   "activeSlice": "v1/SL-002",
-  "activeFeature": "v1/SL-002/feat-001",
-  "lastUpdated": "2026-02-26T10:27:45.000Z",
-  "lastSkill": "colloquium:feature-verify",
+  "activeFeature": null,
+  "lastUpdated": "2026-02-26T21:10:00.000Z",
+  "lastSkill": "colloquium:feature-integrate",
   "versions": {
     "v1": {
       "id": "v1",
@@ -28,7 +28,16 @@
         "feat-006",
         "feat-007",
         "feat-008",
-        "feat-009"
+        "feat-009",
+        "SL-002/feat-001",
+        "SL-002/feat-002",
+        "SL-002/feat-003",
+        "SL-002/feat-004",
+        "SL-002/feat-005",
+        "SL-002/feat-006",
+        "SL-002/feat-007",
+        "SL-002/feat-008",
+        "SL-002/feat-009"
       ],
       "slices": {
         "SL-002": {
@@ -54,7 +63,7 @@
               "bc": "Messaging",
               "type": "aggregate",
               "dependencies": [],
-              "state": "F4",
+              "state": "done",
               "history": []
             },
             "feat-002": {
@@ -63,7 +72,7 @@
               "bc": "Messaging",
               "type": "aggregate",
               "dependencies": ["feat-001"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-003": {
@@ -72,7 +81,7 @@
               "bc": "Messaging",
               "type": "contract",
               "dependencies": ["feat-001"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-004": {
@@ -81,7 +90,7 @@
               "bc": "Messaging",
               "type": "contract",
               "dependencies": ["feat-001", "feat-002"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-005": {
@@ -90,7 +99,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-003"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-006": {
@@ -99,7 +108,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-005"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-007": {
@@ -108,7 +117,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-002", "feat-004"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-008": {
@@ -117,7 +126,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-006", "feat-007"],
-              "state": "C0",
+              "state": "done",
               "history": []
             },
             "feat-009": {
@@ -126,7 +135,7 @@
               "bc": "Messaging",
               "type": "read-model",
               "dependencies": ["feat-006", "feat-007", "feat-008"],
-              "state": "C0",
+              "state": "done",
               "history": []
             }
           }

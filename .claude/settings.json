@@ -86,7 +86,12 @@
       "Bash(sqlite3:*)",
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_evaluate",
-      "mcp__plugin_playwright_playwright__browser_console_messages"
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "Bash(pnpm --filter @colloquium/messaging test)",
+      "Bash(pnpm --filter @colloquium/colloquium-api test)",
+      "Bash(pnpm --filter @colloquium/ui test -- --reporter=verbose src/hooks/useMessageComposer.integration.test.tsx)",
+      "Bash(pnpm --filter @colloquium/ui test)",
+      "Bash(pnpm --filter @colloquium/ui typecheck)"
     ],
     "additionalDirectories": [
       "./vault",

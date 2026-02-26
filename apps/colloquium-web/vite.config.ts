@@ -13,5 +13,11 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    proxy: {
+      "^/channels/[^/]+/messages": {
+        target: "http://localhost:5099",
+        changeOrigin: true,
+      },
+    },
   },
 });

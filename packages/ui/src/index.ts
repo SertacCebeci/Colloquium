@@ -4,6 +4,14 @@ export { cn } from "./lib/utils";
 // Hooks
 export * from "./hooks/use-toast";
 export * from "./hooks/use-mobile";
+export { useChannelFeed } from "./hooks/useChannelFeed";
+export type { ChannelFeedState, UseChannelFeedResult } from "./hooks/useChannelFeed";
+export { useInfiniteChannelFeed, shouldFetchNextPage } from "./hooks/useInfiniteChannelFeed";
+export type { UseInfiniteChannelFeedResult } from "./hooks/useInfiniteChannelFeed";
+export { useMessageComposer, validateInput, postChannelMessage } from "./hooks/useMessageComposer";
+export type { MessageComposerState, UseMessageComposerResult } from "./hooks/useMessageComposer";
+export { useChannelPageErrorState, deriveErrorState } from "./hooks/useChannelPageErrorState";
+export type { ChannelPageErrorState } from "./hooks/useChannelPageErrorState";
 
 // shadcn/ui components
 export * from "./components/ui/accordion";
