@@ -84,7 +84,9 @@
       "Read(//private/tmp/**)",
       "mcp__plugin_playwright_playwright__browser_type",
       "Bash(sqlite3:*)",
-      "mcp__plugin_playwright_playwright__browser_snapshot"
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_console_messages"
     ],
     "additionalDirectories": [
       "./vault",
