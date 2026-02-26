@@ -4,7 +4,7 @@ import { getDb } from "./db/index.js";
 import fs from "node:fs";
 import path from "node:path";
 
-const dbPath = process.env.DATABASE_PATH ?? "./db/reddit.db";
+const dbPath = process.env.DATABASE_PATH ?? "./db/colloquium.db";
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 const db = getDb(dbPath);
@@ -17,6 +17,6 @@ serve(
     port: PORT,
   },
   (info) => {
-    console.log(`reddit-clone-api running on http://localhost:${info.port}`);
+    console.log(`colloquium-api running on http://localhost:${info.port}`);
   }
 );

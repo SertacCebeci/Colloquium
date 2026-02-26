@@ -31,7 +31,7 @@ export function createApp(_db: AppDb, channelRepo?: ChannelRepository) {
   );
 
   app.get("/api/health", (c) => {
-    return c.json({ status: "ok", service: "reddit-clone-api" });
+    return c.json({ status: "ok", service: "colloquium-api" });
   });
 
   app.get("/channels/:channelId/messages", (c) => {
