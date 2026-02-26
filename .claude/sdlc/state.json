@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
   "activeVersion": "v1",
-  "activeSlice": "v1/SL-002",
+  "activeSlice": null,
   "activeFeature": null,
-  "lastUpdated": "2026-02-26T21:10:00.000Z",
-  "lastSkill": "colloquium:feature-integrate",
+  "lastUpdated": "2026-02-26T21:53:00.000Z",
+  "lastSkill": "colloquium:slice-validate",
   "versions": {
     "v1": {
       "id": "v1",
@@ -18,7 +18,7 @@
         "completed": ["A0", "A1", "A2", "A3"],
         "locked": true
       },
-      "completedSlices": ["SL-001"],
+      "completedSlices": ["SL-001", "SL-002"],
       "completedFeatures": [
         "feat-001",
         "feat-002",

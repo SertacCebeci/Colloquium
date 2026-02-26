@@ -1,6 +1,6 @@
 # SL-002 Internal Release Note
 
-**Status:** In progress
+**Status:** Released
 **Slice:** SL-002 — channel-feed-send-ui
 **Features:** 9
 
