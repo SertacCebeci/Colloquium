@@ -1,7 +1,7 @@
 # SDLC v3 — Feature Taxonomy and Specialized Loops
 
-**Status:** Revised design, 2026-02-27 v3 (v1: D0/P0 ownership split, nano decomposed into DDD types, loop variants eliminated, concurrency removed; v2: V1 semantic fix, start-gate removed, H-loop split → hook+api-client, F-loop added, D-loop code review before D4, feature-integrate documented; v3: ordering fix api-client→hook, S1/R1/Q1 states added, state write counts corrected, A4 relabeled, S-loop template added, feature-integrate type-aware checklist, completedFeatures fallback hardened). Ready for implementation.
-**Authored:** 2026-02-27, supersedes 2026-02-26 first draft.
+**Status:** Revised design, 2026-02-28 v4 (v1: D0/P0 ownership split, nano decomposed into DDD types, loop variants eliminated, concurrency removed; v2: V1 semantic fix, start-gate removed, H-loop split → hook+api-client, F-loop added, D-loop code review before D4, feature-integrate documented; v3: ordering fix api-client→hook, S1/R1/Q1 states added, state write counts corrected, A4 relabeled, S-loop template added, feature-integrate type-aware checklist, completedFeatures fallback hardened; v4: review findings applied — S/R/Q state semantics aligned with sub-skills, all loop state write counts corrected to match actual writes, legacy in-progress feature state mapping added, criterion #8 ui-design-expert exception, M-loop test language clarified, test DB check command specified, package creation prerequisite for V/S loops, vi.spyOn(fetch) → vi.spyOn(globalThis 'fetch'), code review rationale table, ordering rule rationale, 12-file maintenance tradeoff acknowledged, BC namespacing documented). Ready for implementation.
+**Authored:** 2026-02-28, supersedes 2026-02-27 v3.
 **Supersedes:** Loop section of `2026-02-26-multi-track-sdlc-redesign.md`.
 
 ---
@@ -43,6 +43,12 @@ with no branching, no skip variants, no conditional sub-steps. Differences that 
 ### Naming Convention
 
 `{domain}:{type}:{kebab-name}`
+
+**BC disambiguation:** The naming convention does not include the BC because collisions are
+unlikely within a single project. If two BCs share the same kebab-name (e.g., `core:aggregate:channel`
+in both Messaging and VideoConferencing), the `bc` field in state.json disambiguates, and the
+`docs/features/<BC>/` path structure prevents file collisions. The naming convention is
+display-only — state.json is the source of truth for BC assignment.
 
 Examples:
 
@@ -92,6 +98,13 @@ core:value-object → core:domain-service → core:aggregate
 No concurrent feature execution at this stage. The pointer advances only when the current
 feature reaches `done` — there is no start-gate.**
 
+**Rationale — type ordering as primary, not dependency-first:** Type ordering avoids context
+switching between layers (backend → frontend → backend). A dependency-first ordering with type
+as tiebreaker would allow independent frontend work to start earlier, but for a solo developer
+the cognitive cost of layer switching outweighs the parallelism benefit. Dependencies are still
+checked — the queue scanner verifies dependency satisfaction before advancing. The type ordering
+ensures features are processed in natural bottom-up layer order.
+
 ---
 
 ## Loop Designs
@@ -104,12 +117,28 @@ Runs before every state advance. Non-negotiable.
 2. `pnpm turbo lint` — zero new ESLint warnings in modified files
 3. All tests in affected package — passing
 
+### Test DB Availability Check
+
+Required by M-loop, R-loop, and Q-loop before activation. Use this exact command:
+
+```bash
+cd apps/colloquium-api && pnpm prisma db execute --stdin <<< "SELECT 1" 2>/dev/null && echo "DB OK" || echo "DB UNAVAILABLE"
+```
+
+If the command outputs "DB UNAVAILABLE", display: "Test DB is not running — start it before
+activating this feature." and block the loop from proceeding. The connection string is read
+from the `DATABASE_URL` environment variable in `apps/colloquium-api/.env`.
+
 ---
 
 ### `core:value-object` — V-loop
 
 Pure domain primitives: value objects, policies, specifications. No injected dependencies.
 **No spec.md.** The type or function signature with JSDoc IS the documentation.
+**Package prerequisite:** If `packages/<bc-name>/` does not exist yet (first core feature in a
+new BC), create the package scaffold before V1:
+`package.json` (name: `@colloquium/<bc-kebab>`), `tsconfig.json` (extends shared config),
+`src/index.ts` (barrel export). Add to turbo pipeline. This is a one-time setup per BC.
 
 ```
 V0 → queued
@@ -134,6 +163,8 @@ State writes: V0 activation, V1 (by feature-spec on template display), V2 (signa
 Stateless domain services with injected dependencies. No mutable class fields. No I/O that is
 not injected as a typed interface.
 **No spec.md.** The TypeScript interface template with JSDoc IS the specification.
+**Package prerequisite:** Same as V-loop — if `packages/<bc-name>/` does not exist, create the
+package scaffold before S1 (see V-loop for details).
 
 ```
 S0 → queued
@@ -143,12 +174,16 @@ S1 → TypeScript interface template approved (feature-spec displayed the templa
      - All injected dependencies listed as constructor parameters (typed interfaces, not
        concrete classes)
      - One-paragraph description of what the service coordinates
-S2 → mocked unit tests written (Vitest, all dependencies mocked with vi.fn()):
+S2 → TypeScript interface + JSDoc written in source file:
+     - All method signatures from the approved template
+     - All injected dependencies as constructor parameters (typed interfaces, not concrete classes)
+S3 → mocked unit tests written (Vitest, all dependencies mocked with vi.fn()):
      - One test per method
      - Test behavior given various mocked return values
      All must FAIL before implementation exists.
-S3 → implementation written + quality gate + exported from package index
-S4 → code review:
+S4 → implementation written + quality gate + exported from package index (crash recovery
+     checkpoint — pre-code-review):
+     code review checklist:
      - All dependencies injected (none instantiated inline)?
      - Stateless (no mutable class fields)?
      - No hidden I/O (file system, fetch, etc.) outside injected deps?
@@ -157,7 +192,7 @@ S4 → code review:
 done → integrated
 ```
 
-State writes: S0 activation, S1 (by feature-spec on template display), S2 (tests written), S3 (implementation written — crash recovery checkpoint), S4 (pre-code-review), done. Six writes.
+State writes: S0 activation, S1 (by feature-spec on template display), S2 (interface written), S3 (tests written), S4 (implementation written — crash recovery checkpoint, pre-code-review), done. Six writes.
 
 ---
 
@@ -184,7 +219,9 @@ Spec: full spec.md in `docs/features/<BC>/<AggregateName>/spec.md` — unchanged
 ### `backend:migration` — M-loop
 
 Prisma schema migrations. Deployment risk, rollback consequence, ordering constraint.
-**No automated unit tests.** Correctness is verified against a real test DB.
+**No new tests written for the migration itself.** Correctness is verified manually against a
+real test DB. The quality gate still runs existing tests in the affected package (schema changes
+can break existing code via Prisma client regeneration).
 **Hard prerequisite:** test DB must be running. Block M0 activation if absent.
 
 ```
@@ -205,7 +242,7 @@ M3 → Migration deployed to test DB: `prisma migrate deploy`
 done → integrated
 ```
 
-State writes: M0 activation, done. Two writes.
+State writes: M0 activation, M1 (by feature-spec), M2 (schema.prisma updated), M3 (migration file generated), done. Five writes.
 
 ---
 
@@ -239,7 +276,7 @@ A4 → code review complete:
 done → integrated
 ```
 
-State writes: A0 activation, done. Two writes.
+State writes: A0 activation, A1 (by feature-spec on spec write), A2 (contract tests written), A3 (handler implemented), A4 (code review complete), done. Six writes.
 Spec: `docs/features/<BC>/<EndpointName>/spec.md` — table format, max 30 lines.
 
 ---
@@ -277,7 +314,7 @@ E4 → code review:
 done → integrated
 ```
 
-State writes: E0 activation, done. Two writes.
+State writes: E0 activation, E1 (by feature-spec on spec write), E2 (tests written), E3 (handler implemented), E4 (code review complete), done. Six writes.
 Spec: `docs/features/<BC>/<EventName>/spec.md` — table format, max 30 lines.
 
 ---
@@ -292,21 +329,27 @@ do not include migration work in the R-loop.**
 
 ```
 R0 → queued (test DB running check — if absent, block and do not proceed)
-R1 → TypeScript interface written (this IS the spec — no spec.md file)
-R2 → integration tests written (Vitest + real Prisma client against test DB):
-     - One test per interface method (save, findById, delete, etc.)
-     - Not-found behavior (null return vs. throw — document which in the interface JSDoc)
+R1 → spec acknowledged (feature-spec confirmed "TypeScript interface IS the spec — no
+     spec.md file." This is the entry state for feature-implement-repository. No file
+     written yet.)
+R2 → TypeScript interface written (this IS the spec — no spec.md file):
+     - Method signatures (save, findById, delete, etc.)
+     - JSDoc documenting not-found behavior (null return vs. throw)
      - Transaction behavior if applicable
+R3 → integration tests written (Vitest + real Prisma client against test DB):
+     - One test per interface method
+     - Not-found behavior tested
+     - Transaction behavior tested if applicable
      All must FAIL before implementation exists.
-R3 → Prisma implementation written (quality gate)
-R4 → tests GREEN + code review:
+R4 → Prisma implementation written (quality gate — crash recovery checkpoint, pre-code-review):
+     code review checklist:
      - N+1 in any method?
      - Missing indexes identified?
      - Connection released correctly in all paths?
 done → integrated
 ```
 
-State writes: R0 activation, R1 (interface written), R2 (integration tests written), R3 (Prisma implementation — crash recovery checkpoint), R4 (tests GREEN, pre-code-review), done. Six writes.
+State writes: R0 activation, R1 (by feature-spec on acknowledgement), R2 (interface written), R3 (integration tests written), R4 (implementation written — crash recovery checkpoint, pre-code-review), done. Six writes.
 
 ---
 
@@ -318,25 +361,28 @@ projection interface with `applyEvent` + query methods.
 
 ```
 Q0 → queued (test DB running check — if absent, block and do not proceed)
-Q1 → TypeScript interface written (this IS the spec — no spec.md file):
+Q1 → spec acknowledged (feature-spec confirmed "TypeScript interface IS the spec — no
+     spec.md file." This is the entry state for feature-implement-projection. No file
+     written yet.)
+Q2 → TypeScript interface written (this IS the spec — no spec.md file):
      - `applyEvent(event: DomainEvent): Promise<void>` method
      - Query methods for the materialized view (findById, list, etc.)
      - JSDoc on applyEvent: which CT-NNN event(s) trigger it
-Q2 → integration tests written (Vitest + real Prisma client against test DB):
+Q3 → integration tests written (Vitest + real Prisma client against test DB):
      - Projection test: call applyEvent with a sequence of realistic domain events
        (using the CT-NNN payload shape) → query the read-side table → assert correct
        materialized state. Must FAIL before implementation exists.
      - Query method tests: findById, list return correct shape and ordering
      All must FAIL before implementation exists.
-Q3 → Prisma implementation written (quality gate)
-Q4 → code review:
+Q4 → Prisma implementation written (quality gate — crash recovery checkpoint, pre-code-review):
+     code review checklist:
      - Is applyEvent idempotent? (same event applied twice = no duplicate or inconsistency)
      - Missing indexes on read-side table for common query patterns?
      - Connection released in all paths?
 done → integrated
 ```
 
-State writes: Q0 activation, Q1 (interface written), Q2 (integration tests written), Q3 (implementation written — crash recovery checkpoint), Q4 (pre-code-review), done. Six writes.
+State writes: Q0 activation, Q1 (by feature-spec on acknowledgement), Q2 (interface written), Q3 (integration tests written), Q4 (implementation written — crash recovery checkpoint, pre-code-review), done. Six writes.
 
 ---
 
@@ -376,14 +422,14 @@ H4 → tests GREEN + convention check:
 done → integrated
 ```
 
-State writes: H0 activation, done. Two writes.
+State writes: H0 activation, H1 (by feature-spec on JSDoc display), H2 (state machine tests written), H3 (RTL integration tests written), H4 (convention check passed), done. Six writes.
 
 ---
 
 ### `frontend:api-client` — F-loop
 
 Typed `fetch` wrappers coupled to `colloquium-api`'s Zod schemas and endpoint paths.
-**Not React-specific — no RTL, no QueryClientProvider.** Tests use `vi.spyOn(fetch)`.
+**Not React-specific — no RTL, no QueryClientProvider.** Tests use `vi.spyOn(globalThis, 'fetch')`.
 **Location:** `apps/*/src/api/`. Placing in `packages/ui` would give the UI package a
 dependency on application-level API contracts, violating CLAUDE.md package boundaries.
 **F0 → F1 is owned by `feature-spec`.** This loop starts at F1 — JSDoc template is already
@@ -397,14 +443,14 @@ F2 → TypeScript interface written in source file + JSDoc (max 20 lines):
      - Zod request type (input)
      - Zod response type (output)
      - Auth requirements (Bearer token, API key, none)
-F3 → Vitest tests written (vi.spyOn(fetch) — no RTL, no QueryClientProvider):
+F3 → Vitest tests written (vi.spyOn(globalThis, 'fetch') — no RTL, no QueryClientProvider):
      - Happy path: spy returns correct response → client decodes and returns correct value
      - Error path: spy returns 4xx/5xx → client throws or returns correct error shape
      All must FAIL before implementation exists.
 done → implementation written + quality gate + integrated
 ```
 
-State writes: F0 activation, F1 (by feature-spec on JSDoc display), done. Three writes.
+State writes: F0 activation, F1 (by feature-spec on JSDoc display), F2 (interface written), F3 (tests written), done. Five writes.
 
 ---
 
@@ -469,7 +515,26 @@ P3 → Playwright E2E: one test per critical path node from JSDoc assembly plan
 done → integrated
 ```
 
-State writes: P1 (written by feature-spec on approval), done. Two writes total.
+State writes: P0 activation, P1 (written by feature-spec on approval), P2 (RTL tests written), P3 (Playwright E2E done), done. Five writes total.
+
+---
+
+### Code Review Rationale by Loop
+
+| Loop   | Code Review? | Rationale                                                                       |
+| ------ | ------------ | ------------------------------------------------------------------------------- |
+| C-loop | Yes (C4)     | Aggregate invariant correctness is the system's highest-risk area               |
+| V-loop | No           | Pure functions — TDD + quality gate is sufficient; zero side effects            |
+| S-loop | Yes (S4)     | Injected dependency contracts must be verified (no hidden I/O)                  |
+| M-loop | No           | Manual DB verification at M3 serves as review; schema changes are SQL-inspected |
+| A-loop | Yes (A4)     | Auth + error mapping correctness requires human verification                    |
+| E-loop | Yes (E4)     | Cross-BC event handling is a critical integration boundary                      |
+| R-loop | Yes (R4)     | N+1 queries and missing indexes are hard to catch with tests alone              |
+| Q-loop | Yes (Q4)     | Idempotency and index coverage require design judgment                          |
+| H-loop | No           | Convention check at H4 serves as lightweight review; hooks are small            |
+| F-loop | No           | Pure fetch wrappers — TDD + quality gate is sufficient; no auth logic           |
+| D-loop | Yes (D3)     | Design conformance and style rules require review before visual gate            |
+| P-loop | No           | Playwright E2E at P3 validates the assembled page end-to-end                    |
 
 ---
 
@@ -527,6 +592,13 @@ Content of each section is specified in the implementation plan (Task 2).
 | `colloquium:feature-implement-component`      | D-loop                                            |
 | `colloquium:feature-implement-page`           | P-loop                                            |
 
+**Maintenance note:** 12 sub-skill files contain duplicated boilerplate (enforcement, session
+banner, quality gate, completion banner, state write JSON). When a shared element changes
+(e.g., quality gate command), all 12 files must be updated. This trades one kind of maintenance
+burden (a single oversized loop with branches) for another (12 explicit files with shared
+patterns). The current approach is more explicit and harder to get wrong per-type. A shared
+"loop runner" with pluggable step definitions could reduce this duplication in v4.
+
 ### Deleted
 
 - `colloquium:project.md` — deprecated, nothing references it
@@ -554,6 +626,34 @@ the user to reclassify any legacy `contract` feature before routing. The `--migr
 explicitly warns that `contract` features require manual reclassification. This is consistent
 with the `--migrate-v3` rule "do NOT auto-reclassify — requires human judgement."
 
+**Legacy in-progress features (state ≠ "done"):** After reclassification, a legacy feature's
+C-state (C2–C7) may not match the new loop's expected states. The `--migrate-v3` handler must
+map legacy C-states to the new loop's equivalent states when the user reclassifies:
+
+| Legacy state | Reclassified to `backend:api` | Reclassified to `backend:event-handler` |
+| ------------ | ----------------------------- | --------------------------------------- |
+| C0           | A0                            | E0                                      |
+| C2           | A1 (spec exists)              | E1 (spec exists)                        |
+| C3–C4        | A2 (tests phase)              | E2 (tests phase)                        |
+| C5–C6        | A3 (impl phase)               | E3 (impl phase)                         |
+| C7           | A4 (pre-done)                 | E4 (pre-done)                           |
+
+For `read-model` reclassified to `frontend:hook`, `frontend:component`, or `frontend:page`:
+
+| Legacy state | Hook | Component | Page |
+| ------------ | ---- | --------- | ---- |
+| C0           | H0   | D0        | P0   |
+| C2           | H1   | D1        | P1   |
+| C3–C4        | H2   | D2        | P2   |
+| C5–C6        | H3   | D3        | P3   |
+| C7           | H4   | D3        | P3   |
+
+The mapping is approximate — the new loop may require re-doing some work. The dispatcher
+displays a warning: "State mapped from legacy C-state — review the current sub-step before
+proceeding. Some work may need to be re-verified under the new loop's quality gate."
+
+Legacy features at `done` state are unaffected — they remain at `done` regardless of type.
+
 **completedFeatures normalization:** Bare IDs normalized to `"{sliceId}/{featureId}"` scoped format.
 
 **Nano features:** Replaced by `core:value-object` and `core:domain-service`. Both are always
@@ -563,12 +663,12 @@ tracked in state.json.
 
 - Aggregate: C0, C2, C3, C4, C5, C6, C7
 - Value Object: V0, V1, V2, V3
-- Domain Service: S0 (queued), S1 (template approved), S2 (tests written), S3 (impl written), S4 (pre-review) [all tracked]
+- Domain Service: S0 (queued), S1 (template approved), S2 (interface written), S3 (tests written), S4 (impl written + pre-review) [all tracked]
 - Migration: M0, M1, M2, M3
 - API: A0, A1, A2, A3, A4
 - Event Handler: E0, E1, E2, E3, E4
-- Repository: R0 (queued), R1 (interface written), R2 (tests written), R3 (impl written), R4 (tests GREEN + review) [all tracked]
-- Projection: Q0 (queued), Q1 (interface written), Q2 (tests written), Q3 (impl written), Q4 (pre-review) [all tracked]
+- Repository: R0 (queued), R1 (spec acknowledged), R2 (interface written), R3 (tests written), R4 (impl written + pre-review) [all tracked]
+- Projection: Q0 (queued), Q1 (spec acknowledged), Q2 (interface written), Q3 (tests written), Q4 (impl written + pre-review) [all tracked]
 - Hook: H0, H1, H2, H3, H4
 - API Client: F0 (queued), F1 (JSDoc approved, set by feature-spec — entry for F-loop), F2, F3
 - Component: D1 (entry, set by feature-spec), D2, D3, D4 (human visual gate)
@@ -610,7 +710,9 @@ SL-002 had 9 spec.md files. Under new taxonomy: 4 (2 aggregates + 2 API routes).
 5. `colloquium:feature-implement` dispatcher reads `feature.type` and routes to one of 12 loops without asking the user
 6. A new session picking up mid-feature can determine its loop, current sub-step, and next required action from state.json + the feature's source files. State.json provides the loop type and current state code; source files provide the work already done.
 7. CLAUDE.md stays under 200 lines after all additions
-8. Expert skills invoked fewer than once per slice on average — CLAUDE.md covers the routine cases
+8. Expert skills invoked fewer than once per slice on average — CLAUDE.md covers the routine cases.
+   Exception: `skills:ui-design-expert` invocation by feature-spec for `frontend:component` (D0→D1)
+   is excluded from this count — it is a mandatory design gate, not an escalation.
 9. No loop has branches or skip-variants — every instance of the same loop type executes the same steps (H2 always requires a real assertion, never a no-op)
 10. D-loop and P-loop: `feature-spec` is the sole owner of D0→D1 and P0→P1 transitions; D-loop code review is completed at D3, before D4 is written
 11. `feature-integrate` advances the queue using type-appropriate initial states and writes `completedFeatures` in scoped format

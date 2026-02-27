@@ -2,6 +2,12 @@
 
 > **For Claude:** Use `superpowers:executing-plans` to implement this plan task-by-task.
 
+**Revised:** 2026-02-28 — review findings applied (sdlc.md routing task added as Task 9.6, status.md
+update task added as Task 9.7, Task 3 state mapping for legacy in-progress features, Task 7k P-loop
+content written from scratch replacing erroneous Task 7f reference, Task 6 feature-spec enforcement
+check made explicit, vi.spyOn(fetch) → vi.spyOn(globalThis, 'fetch') globally, Task 4 rollback note
+added, Task 10 validation steps updated to verify new tasks).
+
 **Goal:** Replace the 3-type flat feature model with a 12-type `{domain}:{type}:{name}` taxonomy,
 each with an invariant loop, eliminating the "DDD loop applied to React hooks" problem from SL-002.
 
@@ -104,20 +110,20 @@ All features: `{domain}:{type}:{kebab-name}`
 
 **The "Never" column is law.**
 
-| Type                    | Tool                         | What to test                                      | Never                         |
-| ----------------------- | ---------------------------- | ------------------------------------------------- | ----------------------------- |
-| `core:aggregate`        | Vitest, zero mocks           | Invariants, state transitions                     | I/O, network                  |
-| `core:value-object`     | Vitest, zero mocks           | Valid/invalid construction, equality              | I/O, mocks                    |
-| `core:domain-service`   | Vitest, vi.fn() mocks        | Method behavior given mocked deps                 | I/O, real deps                |
-| `backend:migration`     | Real test DB (manual verify) | Schema correctness, rollback                      | Unit mocks                    |
-| `backend:api`           | Hono `app.request()`         | Auth, validation, error mapping                   | Playwright                    |
-| `backend:event-handler` | Direct handler call          | Schema rejection, happy path                      | app.request(), Playwright     |
-| `backend:repository`    | Vitest + test DB             | CRUD, transactions, not-found                     | Unit mocks of DB              |
-| `backend:projection`    | Vitest + test DB             | Event sequence → materialized state               | Unit mocks                    |
-| `frontend:hook`         | RTL + QueryClientProvider    | State transitions, error handling                 | Visual rendering, fetch calls |
-| `frontend:api-client`   | Vitest + `vi.spyOn(fetch)`   | Request encoding, response decoding, error shapes | RTL, QueryClientProvider      |
-| `frontend:component`    | RTL (hooks mocked)           | Render, interaction, conditionals                 | Hook logic                    |
-| `frontend:page`         | Playwright                   | Critical user paths                               | API status codes              |
+| Type                    | Tool                                     | What to test                                      | Never                         |
+| ----------------------- | ---------------------------------------- | ------------------------------------------------- | ----------------------------- |
+| `core:aggregate`        | Vitest, zero mocks                       | Invariants, state transitions                     | I/O, network                  |
+| `core:value-object`     | Vitest, zero mocks                       | Valid/invalid construction, equality              | I/O, mocks                    |
+| `core:domain-service`   | Vitest, vi.fn() mocks                    | Method behavior given mocked deps                 | I/O, real deps                |
+| `backend:migration`     | Real test DB (manual verify)             | Schema correctness, rollback                      | Unit mocks                    |
+| `backend:api`           | Hono `app.request()`                     | Auth, validation, error mapping                   | Playwright                    |
+| `backend:event-handler` | Direct handler call                      | Schema rejection, happy path                      | app.request(), Playwright     |
+| `backend:repository`    | Vitest + test DB                         | CRUD, transactions, not-found                     | Unit mocks of DB              |
+| `backend:projection`    | Vitest + test DB                         | Event sequence → materialized state               | Unit mocks                    |
+| `frontend:hook`         | RTL + QueryClientProvider                | State transitions, error handling                 | Visual rendering, fetch calls |
+| `frontend:api-client`   | Vitest + `vi.spyOn(globalThis, 'fetch')` | Request encoding, response decoding, error shapes | RTL, QueryClientProvider      |
+| `frontend:component`    | RTL (hooks mocked)                       | Render, interaction, conditionals                 | Hook logic                    |
+| `frontend:page`         | Playwright                               | Critical user paths                               | API status codes              |
 
 API behavior is **never** tested through Playwright.
 Event handler behavior is **never** tested through `app.request()`.
@@ -248,6 +254,25 @@ Reclassify each "contract" feature manually before running /colloquium:feature-i
 
 ```
 
+8. **State mapping for reclassified in-progress features:** When the user reclassifies a legacy
+   feature that is NOT at `done` state, the C-state must be mapped to the new loop's equivalent
+   state. After the user provides the new type, apply this mapping:
+
+   | Legacy state | → backend:api | → backend:event-handler | → frontend:hook | → frontend:component | → frontend:page |
+   | ------------ | ------------- | ----------------------- | --------------- | -------------------- | --------------- |
+   | C0           | A0            | E0                      | H0              | D0                   | P0              |
+   | C2           | A1            | E1                      | H1              | D1                   | P1              |
+   | C3–C4        | A2            | E2                      | H2              | D2                   | P2              |
+   | C5–C6        | A3            | E3                      | H3              | D3                   | P3              |
+   | C7           | A4            | E4                      | H4              | D3                   | P3              |
+
+   Write the mapped state to state.json. Display a warning:
+   "State mapped from legacy C-state <old> → <new>. The mapping is approximate — review the
+   current sub-step before proceeding. Some work may need to be re-verified under the new
+   loop's quality gate."
+
+   Legacy features at `done` state are unaffected — they remain at `done` regardless of type.
+
 ```
 
 Commit:
@@ -262,6 +287,15 @@ git commit -m "feat(sdlc): add --migrate-v3 handler to version skill"
 ## Task 4: Run the Migration
 
 Invoke `/colloquium:version --migrate-v3`.
+
+**Rollback:** If the migration produces incorrect results, revert via:
+
+```bash
+git checkout -- .claude/sdlc/state.json
+```
+
+This restores the pre-migration state.json. Investigate and fix the `--migrate-v3` handler
+before re-running.
 
 After completion, verify:
 
@@ -514,6 +548,28 @@ State advance: F0 → F1.
 ````
 
 Update schemaVersion checks to accept `3` (and `2` for legacy features).
+
+**Replace the enforcement check:** The current feature-spec enforces `currentFeature.state = "C0"`.
+Replace this with a check for the type-appropriate initial state:
+
+| Type                    | Required initial state |
+| ----------------------- | ---------------------- |
+| `core:value-object`     | `"V0"`                 |
+| `core:domain-service`   | `"S0"`                 |
+| `core:aggregate`        | `"C0"`                 |
+| `backend:migration`     | `"M0"`                 |
+| `backend:api`           | `"A0"`                 |
+| `backend:event-handler` | `"E0"`                 |
+| `backend:repository`    | `"R0"`                 |
+| `backend:projection`    | `"Q0"`                 |
+| `frontend:api-client`   | `"F0"`                 |
+| `frontend:hook`         | `"H0"`                 |
+| `frontend:component`    | `"D0"`                 |
+| `frontend:page`         | `"P0"`                 |
+
+If `currentFeature.state` does not match the type-appropriate initial state, display:
+"Feature is not at initial state — expected <expected> but got <actual>.
+Feature-spec can only run on features that haven't been spec'd yet." Stop.
 
 Update completion banner to show type-appropriate next step for each type.
 
@@ -1340,10 +1396,10 @@ Write from scratch. Key constraints for this version:
 - **H3:** RTL integration tests. Pattern depends on hook type:
   - TanStack Query hooks: QueryClientProvider + real QueryClient + vi.spyOn(globalThis, 'fetch')
     or MSW. Do NOT use vi.fn() for server state — TanStack Query has no injectable dependency
-    to mock. vi.spyOn(fetch) here is correct; it intercepts the network layer, not a React dep.
+    to mock. vi.spyOn(globalThis, 'fetch') here is correct; it intercepts the network layer, not a React dep.
   - useReducer/useState hooks: renderHook without provider is correct. H2 tests cover the state
     machine; H3 tests component-level integration if applicable.
-    Note: vi.spyOn(fetch) in H3 for TanStack Query hooks is intentional. The F-loop boundary is:
+    Note: vi.spyOn(globalThis, 'fetch') in H3 for TanStack Query hooks is intentional. The F-loop boundary is:
     F-loop tests a typed fetch wrapper directly. H3 tests that a hook correctly USES the network.
 
 The loop header and session start display follow the pattern of other sub-skills.
@@ -1494,9 +1550,100 @@ Write from scratch. Key changes from original plan:
 - At P1: read JSDoc from the page file (written by feature-spec). Assemble the page from that
   approved plan. Do NOT re-display the assembly plan — it was already approved.
 
-State writes: P1 is set by feature-spec. This skill writes: done only.
+State writes: P0 activation, P1 (by feature-spec), P2 (RTL tests), P3 (Playwright E2E), done.
 
-(Remaining P1 → P2 → P3 → done content is identical to the original plan Task 7f.)
+Write from scratch:
+
+```markdown
+# colloquium:feature-implement-page — Page Loop (P1 → done)
+
+**Purpose:** Implement `frontend:page` features — assembled pages wiring hooks + components
+into a routed view. P0 → P1 is owned by `feature-spec`. This loop starts at P1.
+Playwright runs here and only here in the feature loop. Invoked by dispatcher.
+
+---
+
+## Enforcement
+
+1. Read state.json. Resolve context (v3 cursor).
+   Require `feature.type = "frontend:page"`.
+   Require `feature.state` ∈ {P1, P2, P3}.
+2. If `feature.state = "P0"`: display "Assembly plan not approved — run
+   /colloquium:feature-spec first to generate and approve the assembly plan." Stop.
+3. Read JSDoc from the page file (written by feature-spec at P0 → P1).
+
+---
+
+## Session Start
+
+Display:
+```
+
+════════════════════════════════════════════════════════════════
+▶ PAGE LOOP — <featureId>: <name>
+════════════════════════════════════════════════════════════════
+State: <feature.state>
+Page file: apps/<app>/src/pages/<PageName>.tsx
+════════════════════════════════════════════════════════════════
+
+```
+Jump to sub-step matching current state.
+
+---
+
+## P1 → P2: Assemble Page + RTL Test
+
+1. Read the JSDoc assembly plan from the page file.
+2. Assemble the page:
+   - Import hooks from `packages/ui/src/hooks/` (React hooks) or `apps/*/src/api/` (API clients)
+   - Import components from `packages/ui/src/ComponentName/`
+   - Handle all states: loading, error, empty, populated
+3. Quality gate: `pnpm turbo typecheck` + `pnpm turbo lint`.
+4. Write RTL test: full page render with all hooks mocked via `vi.fn()`.
+   Test that the page wires hooks to components correctly:
+   - Loading state renders loading indicator
+   - Error state renders error message
+   - Populated state renders correct components with correct props
+5. Run tests — all must FAIL before page implementation is complete (if page was already
+   assembled in step 2, the tests should pass; if not, iterate).
+6. Quality gate on test files.
+State write: `"P2"`.
+
+---
+
+## P2 → P3: Playwright E2E
+
+1. Write Playwright E2E test: one test per critical path node from JSDoc assembly plan.
+   Run against a real running server (not mocked).
+   - Navigate to the page URL
+   - Assert critical UI elements are visible
+   - Test user interactions from the assembly plan
+2. Start dev server if not running.
+3. Run Playwright tests — all must pass.
+4. Code review after E2E GREEN:
+   - All critical paths from JSDoc covered?
+   - No flaky selectors (prefer data-testid or role selectors)?
+   - Test teardown correct (no leaked state between tests)?
+5. Quality gate.
+State write: `"P3"`.
+
+---
+
+## Completion
+
+Advance to `"done"`. Write state.json.
+
+Display:
+```
+
+════════════════════════════════════════════════════════════════
+✅ Page done — <feat-id>: <name>
+Next: /colloquium:feature-integrate
+════════════════════════════════════════════════════════════════
+
+```
+
+```
 
 Commit:
 
@@ -1518,7 +1665,7 @@ Write from scratch:
 
 **Purpose:** Implement `frontend:api-client` features — typed `fetch` wrappers coupled to
 `colloquium-api`'s Zod schemas and endpoint paths. Not React-specific. No RTL.
-Tests use `vi.spyOn(fetch)`. Invoked by dispatcher.
+Tests use `vi.spyOn(globalThis, 'fetch')`. Invoked by dispatcher.
 
 ---
 
@@ -1561,7 +1708,7 @@ Quality gate on interface file (typecheck + lint). State write: `"F2"`.
 
 ## F2 → F3: Write Vitest Tests
 
-Tests use `vi.spyOn(fetch)`. No RTL. No QueryClientProvider.
+Tests use `vi.spyOn(globalThis, 'fetch')`. No RTL. No QueryClientProvider.
 
 1. Happy path: spy returns correct 200 response → client decodes and returns correct value.
 2. Error path: spy returns 4xx/5xx → client throws or returns correct error shape.
@@ -1596,7 +1743,7 @@ Commit:
 
 ```bash
 git add .claude/commands/colloquium/feature-implement-api-client.md
-git commit -m "feat(sdlc): add feature-implement-api-client (F-loop, vi.spyOn(fetch), no RTL)"
+git commit -m "feat(sdlc): add feature-implement-api-client (F-loop, vi.spyOn(globalThis, 'fetch'), no RTL)"
 ```
 
 ---
@@ -1859,6 +2006,163 @@ git commit -m "feat(sdlc): update feature-integrate — accept done for all type
 
 ---
 
+## Task 9.6: Update `sdlc.md` Dispatcher Routing Table
+
+**File:** `.claude/commands/colloquium/sdlc.md`
+
+Read the file first. The current routing table only handles C0, C2–C7, F4 states. After v3,
+features can be in states like V2, S3, H2, M3, A1, E4, R3, Q2, D3, P2, F2, etc.
+
+**Step 1:** Find the routing/dispatch section that maps `currentFeature.state` to the appropriate
+skill invocation.
+
+**Step 2:** Replace the existing routing conditions with a type-first routing table:
+
+```markdown
+### Routing by feature type and state
+
+Read `currentFeature.type` and `currentFeature.state`.
+
+| Type                                     | States | Route to                                                       |
+| ---------------------------------------- | ------ | -------------------------------------------------------------- |
+| `core:aggregate` (or legacy `aggregate`) | C0     | `feature-spec`                                                 |
+| `core:aggregate`                         | C2–C7  | `feature-implement` (dispatcher routes to aggregate sub-skill) |
+| `core:aggregate`                         | done   | `feature-integrate`                                            |
+| `core:value-object`                      | V0     | `feature-spec`                                                 |
+| `core:value-object`                      | V1–V3  | `feature-implement`                                            |
+| `core:value-object`                      | done   | `feature-integrate`                                            |
+| `core:domain-service`                    | S0     | `feature-spec`                                                 |
+| `core:domain-service`                    | S1–S4  | `feature-implement`                                            |
+| `core:domain-service`                    | done   | `feature-integrate`                                            |
+| `backend:migration`                      | M0     | `feature-spec`                                                 |
+| `backend:migration`                      | M1–M3  | `feature-implement`                                            |
+| `backend:migration`                      | done   | `feature-integrate`                                            |
+| `backend:api`                            | A0     | `feature-spec`                                                 |
+| `backend:api`                            | A1–A4  | `feature-implement`                                            |
+| `backend:api`                            | done   | `feature-integrate`                                            |
+| `backend:event-handler`                  | E0     | `feature-spec`                                                 |
+| `backend:event-handler`                  | E1–E4  | `feature-implement`                                            |
+| `backend:event-handler`                  | done   | `feature-integrate`                                            |
+| `backend:repository`                     | R0     | `feature-spec`                                                 |
+| `backend:repository`                     | R1–R4  | `feature-implement`                                            |
+| `backend:repository`                     | done   | `feature-integrate`                                            |
+| `backend:projection`                     | Q0     | `feature-spec`                                                 |
+| `backend:projection`                     | Q1–Q4  | `feature-implement`                                            |
+| `backend:projection`                     | done   | `feature-integrate`                                            |
+| `frontend:api-client`                    | F0     | `feature-spec`                                                 |
+| `frontend:api-client`                    | F1–F3  | `feature-implement`                                            |
+| `frontend:api-client`                    | done   | `feature-integrate`                                            |
+| `frontend:hook`                          | H0     | `feature-spec`                                                 |
+| `frontend:hook`                          | H1–H4  | `feature-implement`                                            |
+| `frontend:hook`                          | done   | `feature-integrate`                                            |
+| `frontend:component`                     | D0     | `feature-spec`                                                 |
+| `frontend:component`                     | D1–D4  | `feature-implement`                                            |
+| `frontend:component`                     | done   | `feature-integrate`                                            |
+| `frontend:page`                          | P0     | `feature-spec`                                                 |
+| `frontend:page`                          | P1–P3  | `feature-implement`                                            |
+| `frontend:page`                          | done   | `feature-integrate`                                            |
+
+For `core:aggregate` at state `C7`: route to `feature-verify` (UAT gate before integration).
+
+For legacy types (`contract`, `read-model`): ask the user to reclassify before routing.
+Display: "Legacy feature type '<type>' — reclassify to a v3 type before proceeding.
+Run /colloquium:version --migrate-v3 for guidance."
+
+For unrecognized state codes: display error with current type and state, suggest running
+the appropriate skill manually.
+```
+
+**Step 3:** Update schemaVersion check to accept `3` (and `2` for legacy).
+
+Commit:
+
+```bash
+git add .claude/commands/colloquium/sdlc.md
+git commit -m "feat(sdlc): update sdlc dispatcher routing table for all v3 state codes"
+```
+
+---
+
+## Task 9.7: Update `status.md` for New State Codes
+
+**File:** `.claude/commands/colloquium/status.md`
+
+Read the file first. The status dashboard needs to display descriptions for all new state codes.
+
+**Step 1:** Find the state description table or display logic.
+
+**Step 2:** Add state descriptions for all new prefixes:
+
+```markdown
+### State Code Descriptions
+
+| Code  | Meaning                                 |
+| ----- | --------------------------------------- |
+| V0    | Queued (value object)                   |
+| V1    | JSDoc template approved                 |
+| V2    | Type/function signature written         |
+| V3    | Pure tests written                      |
+| S0    | Queued (domain service)                 |
+| S1    | Interface template approved             |
+| S2    | Interface written in source             |
+| S3    | Mocked unit tests written               |
+| S4    | Implementation written (pre-review)     |
+| M0    | Queued (migration)                      |
+| M1    | Schema.prisma updated                   |
+| M2    | Migration file generated                |
+| M3    | Migration deployed to test DB           |
+| A0    | Queued (API)                            |
+| A1    | Spec written (table format)             |
+| A2    | Contract tests written                  |
+| A3    | Handler implemented                     |
+| A4    | Code review complete                    |
+| E0    | Queued (event handler)                  |
+| E1    | Spec written (table format)             |
+| E2    | Tests written (direct call)             |
+| E3    | Handler implemented                     |
+| E4    | Code review complete                    |
+| R0    | Queued (repository)                     |
+| R1    | Spec acknowledged                       |
+| R2    | Interface written                       |
+| R3    | Integration tests written               |
+| R4    | Implementation written (pre-review)     |
+| Q0    | Queued (projection)                     |
+| Q1    | Spec acknowledged                       |
+| Q2    | Interface written                       |
+| Q3    | Integration tests written               |
+| Q4    | Implementation written (pre-review)     |
+| H0    | Queued (hook)                           |
+| H1    | JSDoc written                           |
+| H2    | State machine tests written             |
+| H3    | RTL integration tests written           |
+| H4    | Convention check passed                 |
+| F0    | Queued (API client)                     |
+| F1    | JSDoc template approved                 |
+| F2    | Interface written                       |
+| F3    | Tests written                           |
+| D0    | Queued (component — needs feature-spec) |
+| D1    | Design approved (design.md written)     |
+| D2    | RTL tests written                       |
+| D3    | Component implemented (pre-visual-gate) |
+| D4    | Human visual gate confirmed             |
+| P0    | Queued (page — needs feature-spec)      |
+| P1    | Assembly plan approved                  |
+| P2    | RTL tests written                       |
+| P3    | Playwright E2E done                     |
+| C0–C7 | (Unchanged — aggregate states)          |
+```
+
+**Step 3:** Update schemaVersion check to accept `3`.
+
+Commit:
+
+```bash
+git add .claude/commands/colloquium/status.md
+git commit -m "feat(sdlc): update status dashboard with all v3 state code descriptions"
+```
+
+---
+
 ## Task 10: End-to-End Validation
 
 **Step 1:** Read `feature-implement.md`. Confirm all 12 types have a route in the routing table.
@@ -1908,7 +2212,14 @@ and blocks if `feature.state = "P0"` with a message directing to `feature-spec`.
 their embedded step tables. Verify the dispatcher resolution table in simulate.md matches the
 dispatcher routing table in feature-implement.md exactly.
 
-**Step 8:** Invoke `superpowers:verification-before-completion` before declaring done.
+**Step 8:** Verify `sdlc.md` routing table handles all new states:
+Read `sdlc.md` — confirm routing covers V0–V3, S0–S4, M0–M3, A0–A4, E0–E4, R0–R4, Q0–Q4,
+H0–H4, F0–F3, D0–D4, P0–P3 in addition to existing C0–C7.
+
+**Step 9:** Verify `status.md` state descriptions:
+Read `status.md` — confirm all new state codes have descriptions.
+
+**Step 10:** Invoke `superpowers:verification-before-completion` before declaring done.
 
 **Final commit:**
 
@@ -1933,5 +2244,7 @@ git commit -m "feat(sdlc): complete v3 taxonomy — dispatcher + 12 loops + type
 - [ ] `feature-implement-component.md` enforces entry at D1, blocks D0; code review at D3 before D4
 - [ ] `feature-implement-page.md` enforces entry at P1, blocks P0
 - [ ] `feature-implement-hook.md` is React-hooks-only; H2 always asserts something real (no expect(true).toBe(true))
-- [ ] `feature-implement-api-client.md` exists; uses vi.spyOn(fetch); no RTL
+- [ ] `feature-implement-api-client.md` exists; uses vi.spyOn(globalThis, 'fetch'); no RTL
 - [ ] `simulate.md` routing tables match feature-implement.md dispatcher exactly (12 types)
+- [ ] `sdlc.md` routing table handles all v3 state codes (V/S/M/A/E/R/Q/H/F/D/P + legacy C)
+- [ ] `status.md` state description table covers all new state codes
