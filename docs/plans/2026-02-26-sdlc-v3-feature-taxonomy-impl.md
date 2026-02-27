@@ -88,13 +88,13 @@ All features: `{domain}:{type}:{kebab-name}`
 | `backend:event-handler` | E-loop | `apps/colloquium-api/`                     |
 | `backend:repository`    | R-loop | `apps/colloquium-api/`                     |
 | `backend:projection`    | Q-loop | `apps/colloquium-api/`                     |
-| `frontend:hook`         | H-loop | `packages/ui/src/hooks/`                   |
 | `frontend:api-client`   | F-loop | `apps/*/src/api/`                          |
+| `frontend:hook`         | H-loop | `packages/ui/src/hooks/`                   |
 | `frontend:component`    | D-loop | `packages/ui/src/ComponentName/`           |
 | `frontend:page`         | P-loop | `apps/*/src/pages/`                        |
 
 **Ordering rule (sequential — `activeFeature` is a single pointer):**
-`core:value-object → core:domain-service → core:aggregate → backend:migration → backend:repository → backend:projection → backend:api → backend:event-handler → frontend:hook → frontend:api-client → frontend:component → frontend:page`
+`core:value-object → core:domain-service → core:aggregate → backend:migration → backend:repository → backend:projection → backend:api → backend:event-handler → frontend:api-client → frontend:hook → frontend:component → frontend:page`
 ```
 
 **Step 3: Append Testing Strategy section**
@@ -219,7 +219,8 @@ When invoked as `/colloquium:version --migrate-v3`:
    (e.g., `"feat-001"`) to scoped format (e.g., `"SL-001/feat-001"`).
    Scoped IDs (those containing "/") are already correct — leave them unchanged.
    Use the slice ID from the version's `slices` keys to determine the correct prefix.
-   If a bare ID cannot be matched to a slice, prefix with the first completed slice ID.
+   If a bare ID cannot be matched to a slice, **stop and require manual correction**. Write a
+   warning list of unmatched IDs — do not silently assign.
 
 3. Set `schemaVersion` to `3`.
 
@@ -303,7 +304,7 @@ Update error message: reference `--migrate-v3` instead of `--migrate`.
 **Ordering rule (sequential — no concurrent features):**
 
 Assign feature order using this precedence chain:
-`core:value-object → core:domain-service → core:aggregate → backend:migration → backend:repository → backend:projection → backend:api → backend:event-handler → frontend:hook → frontend:api-client → frontend:component → frontend:page`
+`core:value-object → core:domain-service → core:aggregate → backend:migration → backend:repository → backend:projection → backend:api → backend:event-handler → frontend:api-client → frontend:hook → frontend:component → frontend:page`
 
 `activeFeature` is a single pointer. One feature executes at a time. The pointer advances
 only when the current feature reaches `done` — there is no start-gate.
@@ -324,8 +325,8 @@ Replace any check for `state = "C0"` with a check for the type-appropriate initi
 | `backend:event-handler` | `"E0"`                 |
 | `backend:repository`    | `"R0"`                 |
 | `backend:projection`    | `"Q0"`                 |
-| `frontend:hook`         | `"H0"`                 |
 | `frontend:api-client`   | `"F0"`                 |
+| `frontend:hook`         | `"H0"`                 |
 | `frontend:component`    | `"D0"`                 |
 | `frontend:page`         | `"P0"`                 |
 
@@ -359,8 +360,8 @@ The initial state must match the type — do NOT default all features to `"C0"`:
 | `backend:event-handler` | `"E0"`        | activation                               |
 | `backend:repository`    | `"R0"`        | activation                               |
 | `backend:projection`    | `"Q0"`        | activation                               |
-| `frontend:hook`         | `"H0"`        | activation                               |
 | `frontend:api-client`   | `"F0"`        | activation                               |
+| `frontend:hook`         | `"H0"`        | activation                               |
 | `frontend:component`    | `"D0"`        | activation (feature-spec advances to D1) |
 | `frontend:page`         | `"P0"`        | activation (feature-spec advances to P1) |
 
@@ -410,7 +411,21 @@ Display JSDoc template:
 No file written. State advance: V0 → V1.
 
 **`core:domain-service`:**
-Display: "TypeScript interface IS the spec — no spec.md. Write the interface at S1."
+Generate TypeScript interface template (max 20 lines). Display to user. Do NOT write a file.
+
+```typescript
+/**
+ * [ServiceName]: [one sentence — what does this service coordinate?]
+ *
+ * Dependencies:
+ *   - [DependencyInterface]: [purpose]
+ *   - [DependencyInterface]: [purpose]
+ */
+export interface [ServiceName] {
+  [methodName]([params]): Promise<[ReturnType]>;
+}
+```
+
 State advance: S0 → S1.
 
 **`backend:migration`:**
@@ -1355,7 +1370,107 @@ Write from scratch. Key changes from original plan:
   approve the design proposal." Stop.
 - Read `docs/features/<bc>/<ComponentName>/design.md` at D1 — it was written by feature-spec.
 
-(Remaining D2 → D3 → D4 → done content is identical to the original plan Task 7e.)
+Write from scratch:
+
+```markdown
+# colloquium:feature-implement-component — Component Loop (D1 → done)
+
+**Purpose:** Implement `frontend:component` features — reusable React components with visual
+design gate. D0 → D1 is owned by `feature-spec`. This loop starts at D1.
+Invoked by dispatcher.
+
+---
+
+## Enforcement
+
+1. Read state.json. Resolve context (v3 cursor).
+   Require `feature.type = "frontend:component"`.
+   Require `feature.state` ∈ {D1, D2, D3, D4}.
+2. If `feature.state = "D0"`: display "Design gate not complete — run
+   /colloquium:feature-spec first to generate and approve the design proposal." Stop.
+3. Read `docs/features/<bc>/<ComponentName>/design.md` — written by feature-spec at D0 → D1.
+
+---
+
+## Session Start
+
+Display:
+```
+
+════════════════════════════════════════════════════════════════
+▶ COMPONENT LOOP — <featureId>: <name>
+════════════════════════════════════════════════════════════════
+State: <feature.state>
+Design: docs/features/<bc>/<ComponentName>/design.md
+════════════════════════════════════════════════════════════════
+
+```
+Jump to sub-step matching current state.
+
+---
+
+## D1 → D2: Write RTL Tests
+
+Read design.md. Write RTL tests (all hooks mocked via vi.fn()):
+
+- One test per visual state from design.md
+- Interaction tests (click, input, submit)
+- Conditional display tests
+
+All must FAIL before component exists.
+Quality gate on test files. State write: `"D2"`.
+
+---
+
+## D2 → D3: Implement Component + Code Review
+
+1. Implement component per design.md:
+   - Tailwind classes from the approved plan
+   - shadcn/ui primitives as specified
+   - Zero inline styles
+   - Export from `packages/ui/src/index.ts`
+2. Run RTL tests — all must pass.
+3. Quality gate: `pnpm turbo typecheck` + `pnpm turbo lint` +
+   `pnpm --filter @colloquium/ui test`.
+4. Code review checklist:
+   - Matches design.md?
+   - Zero inline styles?
+   - All D2 tests passing?
+   - Exported correctly from package index?
+
+Code review failure → fix in D3, re-run quality gate, re-request review before D4.
+State write: `"D3"`.
+
+---
+
+## D3 → D4: Storybook Stories + Human Visual Gate
+
+1. Write Storybook stories — one per visual state from design.md.
+2. **HUMAN CHECKPOINT — hard gate:**
+   Display: "Run Storybook and verify each story against design.md. Reply 'confirmed' when
+   all stories visually match, or 'fix: <description>' to return to D3."
+3. Wait for explicit user confirmation before advancing.
+4. If user reports a mismatch: return to D3, fix, re-run tests, re-present D4 gate.
+
+State write: `"D4"` — written only after user confirms visual check passes.
+
+---
+
+## Completion
+
+Advance to `"done"`. Write state.json.
+
+Display:
+```
+
+════════════════════════════════════════════════════════════════
+✅ Component done — <feat-id>: <name>
+Next: /colloquium:feature-integrate
+════════════════════════════════════════════════════════════════
+
+```
+
+```
 
 Commit:
 
@@ -1616,7 +1731,7 @@ git commit -m "feat(sdlc): restrict feature-verify to core:aggregate at C7"
 
 **File:** `.claude/commands/colloquium/feature-integrate.md`
 
-Read the file first. Make these three targeted changes:
+Read the file first. Make these six targeted changes:
 
 **Step 1:** Update the entry state enforcement.
 
@@ -1653,8 +1768,8 @@ check for `state = "C0"` with a check for the type-appropriate initial state:
 | `backend:event-handler` | `"E0"`                 |
 | `backend:repository`    | `"R0"`                 |
 | `backend:projection`    | `"Q0"`                 |
-| `frontend:hook`         | `"H0"`                 |
 | `frontend:api-client`   | `"F0"`                 |
+| `frontend:hook`         | `"H0"`                 |
 | `frontend:component`    | `"D0"`                 |
 | `frontend:page`         | `"P0"`                 |
 
@@ -1678,6 +1793,62 @@ completedFeatures.push(`${sliceId}/${featureId}`)
 Verify no other code path writes bare (unscoped) IDs to `completedFeatures`.
 
 **Step 4:** Update schemaVersion check to accept `3` (and `2` for legacy).
+
+**Step 5:** Make uat.md read conditional on feature type.
+
+Find the section that reads `docs/features/<bc>/<aggregate>/uat.md`. This file is written by
+`feature-verify`, which in v3 is restricted to `core:aggregate` only. All other feature types
+skip `feature-verify` and never produce a `uat.md`.
+
+Wrap the uat.md read in a type check:
+
+```markdown
+If `currentFeature.type = "core:aggregate"` (or legacy `"aggregate"`):
+Read `docs/features/<bc>/<AggregateName>/uat.md` and include UAT results in integration context.
+Else:
+Skip uat.md read — this feature type does not produce UAT artifacts.
+```
+
+**Step 6:** Make the integration checklist type-aware.
+
+The current integration checklist runs 4 items for every feature type:
+
+1. Upstream wiring (event connections)
+2. Downstream wiring (event connections)
+3. Policy documents for new cross-cutting interactions
+4. Feature flag lifecycle
+
+For most non-aggregate types (value objects, hooks, components, API clients, migrations),
+items 1–3 are always N/A. Replace the single checklist with type-routed checklists:
+
+```markdown
+**Integration checklist by type:**
+
+`core:aggregate`, `backend:event-handler`:
+
+1. Upstream wiring (event connections)
+2. Downstream wiring (event connections)
+3. Policy documents for new cross-cutting interactions
+4. Feature flag lifecycle
+
+`backend:api`, `backend:repository`, `backend:projection`:
+
+1. Feature flag lifecycle
+2. Verify no N+1 queries escaped code review
+
+`core:value-object`, `core:domain-service`:
+
+1. Feature flag lifecycle (if feature is behind a flag)
+
+`backend:migration`:
+
+1. Rollback SQL verified at `docs/migrations/rollbacks/`
+2. Feature flag lifecycle (if migration is behind a flag)
+
+`frontend:api-client`, `frontend:hook`, `frontend:component`, `frontend:page`:
+
+1. Feature flag lifecycle
+```
 
 Commit:
 
@@ -1743,7 +1914,7 @@ dispatcher routing table in feature-implement.md exactly.
 
 ```bash
 git add .claude/commands/colloquium/
-git commit -m "feat(sdlc): complete v3 taxonomy — dispatcher + 11 loops + type-aware spec+verify"
+git commit -m "feat(sdlc): complete v3 taxonomy — dispatcher + 12 loops + type-aware spec+verify"
 ```
 
 ---
@@ -1763,4 +1934,4 @@ git commit -m "feat(sdlc): complete v3 taxonomy — dispatcher + 11 loops + type
 - [ ] `feature-implement-page.md` enforces entry at P1, blocks P0
 - [ ] `feature-implement-hook.md` is React-hooks-only; H2 always asserts something real (no expect(true).toBe(true))
 - [ ] `feature-implement-api-client.md` exists; uses vi.spyOn(fetch); no RTL
-- [ ] `simulate.md` routing tables match feature-implement.md dispatcher exactly (11 types)
+- [ ] `simulate.md` routing tables match feature-implement.md dispatcher exactly (12 types)

@@ -1,6 +1,6 @@
 # SDLC v3 — Feature Taxonomy and Specialized Loops
 
-**Status:** Revised design, 2026-02-27 v2 (v1: D0/P0 ownership split, nano decomposed into DDD types, loop variants eliminated, concurrency removed; v2: V1 semantic fix, start-gate removed, H-loop split → hook+api-client, F-loop added, D-loop code review before D4, feature-integrate documented). Ready for implementation.
+**Status:** Revised design, 2026-02-27 v3 (v1: D0/P0 ownership split, nano decomposed into DDD types, loop variants eliminated, concurrency removed; v2: V1 semantic fix, start-gate removed, H-loop split → hook+api-client, F-loop added, D-loop code review before D4, feature-integrate documented; v3: ordering fix api-client→hook, S1/R1/Q1 states added, state write counts corrected, A4 relabeled, S-loop template added, feature-integrate type-aware checklist, completedFeatures fallback hardened). Ready for implementation.
 **Authored:** 2026-02-27, supersedes 2026-02-26 first draft.
 **Supersedes:** Loop section of `2026-02-26-multi-track-sdlc-redesign.md`.
 
@@ -72,8 +72,8 @@ frontend:page:channel-feed-page
 | `backend:event-handler` | E-loop | `apps/colloquium-api/`                     | Domain event ACL handlers — cross-BC event ingestion                                              |
 | `backend:repository`    | R-loop | `apps/colloquium-api/`                     | Prisma command-side repository implementations                                                    |
 | `backend:projection`    | Q-loop | `apps/colloquium-api/`                     | Prisma query-side projections fed by domain events                                                |
-| `frontend:hook`         | H-loop | `packages/ui/src/hooks/`                   | React hooks only (`useState`, `useReducer`, `useEffect`, TanStack Query wrappers)                 |
 | `frontend:api-client`   | F-loop | `apps/*/src/api/`                          | Typed `fetch` wrappers coupled to `colloquium-api` Zod schemas — app-specific, not React-specific |
+| `frontend:hook`         | H-loop | `packages/ui/src/hooks/`                   | React hooks only (`useState`, `useReducer`, `useEffect`, TanStack Query wrappers)                 |
 | `frontend:component`    | D-loop | `packages/ui/src/ComponentName/`           | UI components (stories at step D4)                                                                |
 | `frontend:page`         | P-loop | `apps/*/src/pages/`                        | Assembled pages (E2E at step P3)                                                                  |
 
@@ -85,7 +85,7 @@ frontend:page:channel-feed-page
 core:value-object → core:domain-service → core:aggregate
   → backend:migration → backend:repository → backend:projection
   → backend:api → backend:event-handler
-  → frontend:hook → frontend:api-client → frontend:component → frontend:page
+  → frontend:api-client → frontend:hook → frontend:component → frontend:page
 ```
 
 **This is sequential. `activeFeature` is a single pointer — features execute one at a time.
@@ -125,7 +125,7 @@ V3 → pure tests written (Vitest, zero mocks, zero framework imports):
 done → implementation written + quality gate + exported from package index; then integrated
 ```
 
-State writes: V0 activation, V1 (by feature-spec on template display), done. Three writes.
+State writes: V0 activation, V1 (by feature-spec on template display), V2 (signature written), V3 (tests written), done. Five writes.
 
 ---
 
@@ -133,11 +133,12 @@ State writes: V0 activation, V1 (by feature-spec on template display), done. Thr
 
 Stateless domain services with injected dependencies. No mutable class fields. No I/O that is
 not injected as a typed interface.
-**No spec.md.** The TypeScript interface IS the documentation.
+**No spec.md.** The TypeScript interface template with JSDoc IS the specification.
 
 ```
 S0 → queued
-S1 → TypeScript interface written + JSDoc:
+S1 → TypeScript interface template approved (feature-spec displayed the template; no file
+     written yet. This is the entry state for feature-implement-domain-service.):
      - Method signatures
      - All injected dependencies listed as constructor parameters (typed interfaces, not
        concrete classes)
@@ -156,7 +157,7 @@ S4 → code review:
 done → integrated
 ```
 
-State writes: S0 activation, S2 (tests written), S3 (implementation written — crash recovery checkpoint), S4 (pre-code-review), done. Five writes.
+State writes: S0 activation, S1 (by feature-spec on template display), S2 (tests written), S3 (implementation written — crash recovery checkpoint), S4 (pre-code-review), done. Six writes.
 
 ---
 
@@ -230,7 +231,7 @@ A2 → contract tests written (app.request()):
      - One missing-auth test (no Authorization header → 401)
      All must FAIL before handler exists.
 A3 → handler implemented (OpenAPIHono createRoute, quality gate)
-A4 → tests GREEN + code review:
+A4 → code review complete:
      - Auth checked before domain call?
      - All error mapping rows covered by tests?
      - N+1 risk in domain call?
@@ -305,7 +306,7 @@ R4 → tests GREEN + code review:
 done → integrated
 ```
 
-State writes: R0 activation, R2 (interface written), R3 (tests written — crash recovery checkpoint), R4 (implementation written), done. Five writes.
+State writes: R0 activation, R1 (interface written), R2 (integration tests written), R3 (Prisma implementation — crash recovery checkpoint), R4 (tests GREEN, pre-code-review), done. Six writes.
 
 ---
 
@@ -335,7 +336,7 @@ Q4 → code review:
 done → integrated
 ```
 
-State writes: Q0 activation, Q2 (interface written), Q3 (implementation written — crash recovery checkpoint), Q4 (pre-code-review), done. Five writes.
+State writes: Q0 activation, Q1 (interface written), Q2 (integration tests written), Q3 (implementation written — crash recovery checkpoint), Q4 (pre-code-review), done. Six writes.
 
 ---
 
@@ -484,7 +485,7 @@ State writes: P1 (written by feature-spec on approval), done. Two writes total.
 
 **Add (~68 lines):**
 
-- Feature taxonomy table + ordering rule (~26 lines — 11 types)
+- Feature taxonomy table + ordering rule (~26 lines — 12 types)
 - Testing strategy by layer (~10 lines)
 - Quality gate (~7 lines)
 - File locations (~12 lines)
@@ -521,8 +522,8 @@ Content of each section is specified in the implementation plan (Task 2).
 | `colloquium:feature-implement-event-handler`  | E-loop                                            |
 | `colloquium:feature-implement-repository`     | R-loop                                            |
 | `colloquium:feature-implement-projection`     | Q-loop                                            |
-| `colloquium:feature-implement-hook`           | H-loop                                            |
 | `colloquium:feature-implement-api-client`     | F-loop                                            |
+| `colloquium:feature-implement-hook`           | H-loop                                            |
 | `colloquium:feature-implement-component`      | D-loop                                            |
 | `colloquium:feature-implement-page`           | P-loop                                            |
 
@@ -562,12 +563,12 @@ tracked in state.json.
 
 - Aggregate: C0, C2, C3, C4, C5, C6, C7
 - Value Object: V0, V1, V2, V3
-- Domain Service: S0 (queued), S2 (tests written), S3 (impl written), S4 (pre-review) [all tracked]
+- Domain Service: S0 (queued), S1 (template approved), S2 (tests written), S3 (impl written), S4 (pre-review) [all tracked]
 - Migration: M0, M1, M2, M3
 - API: A0, A1, A2, A3, A4
 - Event Handler: E0, E1, E2, E3, E4
-- Repository: R0 (queued), R2 (interface written), R3 (tests written), R4 (impl written) [all tracked]
-- Projection: Q0 (queued), Q2 (interface written), Q3 (impl written), Q4 (pre-review) [all tracked]
+- Repository: R0 (queued), R1 (interface written), R2 (tests written), R3 (impl written), R4 (tests GREEN + review) [all tracked]
+- Projection: Q0 (queued), Q1 (interface written), Q2 (tests written), Q3 (impl written), Q4 (pre-review) [all tracked]
 - Hook: H0, H1, H2, H3, H4
 - API Client: F0 (queued), F1 (JSDoc approved, set by feature-spec — entry for F-loop), F2, F3
 - Component: D1 (entry, set by feature-spec), D2, D3, D4 (human visual gate)
