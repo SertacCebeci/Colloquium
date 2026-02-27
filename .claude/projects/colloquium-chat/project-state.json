@@ -13,6 +13,9 @@
   "currentTestIndex": 17,
   "phase": "develop",
   "lastUpdated": "2026-02-23T20:16:26.108256+00:00",
-  "sessionCount": 9,
-  "techStackNote": "Frontend expanded: TanStack Query v5, React Hook Form v7 + Zod, TanStack Table v8, nuqs v2 added 2026-02-23"
+  "sessionCount": 12,
+  "techStackNote": "Frontend expanded: TanStack Query v5, React Hook Form v7 + Zod, TanStack Table v8, nuqs v2 added 2026-02-23",
+  "frontendPackage": "@colloquium/colloquium-chat",
+  "apiPackage": "@colloquium/colloquium-chat-api",
+  "frontendPort": 5173
 }

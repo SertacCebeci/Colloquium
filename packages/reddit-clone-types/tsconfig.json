@@ -1,0 +1,10 @@
+{
+  "extends": "@colloquium/tsconfig/base",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "moduleResolution": "bundler"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

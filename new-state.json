@@ -1,0 +1,53 @@
+{
+  "activeVersion": "version-01",
+  "activeSlice": "version-01_slice-01",
+  "activeFeature": "version-01_slice-01_feature-01",
+  "versions": {
+    "version-01": {
+      "slices": {
+        "version-01_slice-01": {
+          "features": {
+            "version-01_slice-01_feature-01": {
+              "id": "version-01_slice-01_feature-01",
+              "name": "Feature 1",
+              "description": "Description of Feature 1"
+            },
+            "version-01_slice-01_feature-02": {
+              "id": "version-01_slice-01_feature-02",
+              "name": "Feature 2",
+              "state": "done",
+              "type": "read-model",
+              "dependencies": ["version-01_slice-01_feature-01"],
+              "description": "Description of Feature 2",
+              "enabled": false
+            }
+          }
+        },
+        "version-01_slice-02": {
+          "features": {
+            "version-01_slice-02_feature-01": {
+              "id": "version-01_slice-02_feature-01",
+              "name": "Feature 3",
+              "description": "Description of Feature 3",
+              "enabled": true
+            }
+          }
+        }
+      }
+    },
+    "version-02": {
+      "slices": {
+        "version-02_slice-01": {
+          "features": {
+            "version-02_slice-01_feature-01": {
+              "id": "version-02_slice-01_feature-01",
+              "name": "Feature 4",
+              "description": "Description of Feature 4",
+              "enabled": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
