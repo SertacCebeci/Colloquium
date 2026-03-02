@@ -80,7 +80,7 @@ frontend:page:channel-feed-page
 | `backend:projection`    | Q-loop | `apps/colloquium-api/`                     | Prisma query-side projections fed by domain events                                                |
 | `frontend:api-client`   | F-loop | `apps/*/src/api/`                          | Typed `fetch` wrappers coupled to `colloquium-api` Zod schemas — app-specific, not React-specific |
 | `frontend:hook`         | H-loop | `packages/ui/src/hooks/`                   | React hooks only (`useState`, `useReducer`, `useEffect`, TanStack Query wrappers)                 |
-| `frontend:component`    | D-loop | `packages/ui/src/ComponentName/`           | UI components (stories at step D4)                                                                |
+| `frontend:component`    | D-loop | `packages/ui/src/ComponentName/`           | UI components (visual gate via Playwright screenshots at D4)                                      |
 | `frontend:page`         | P-loop | `apps/*/src/pages/`                        | Assembled pages (E2E at step P3)                                                                  |
 
 ### Ordering Rule
@@ -98,6 +98,15 @@ core:value-object → core:domain-service → core:aggregate
 No concurrent feature execution at this stage. The pointer advances only when the current
 feature reaches `done` — there is no start-gate.**
 
+**Multi-BC sort rule:** When a slice spans multiple bounded contexts, sort by type first (using
+the precedence chain above), then by BC within each type tier. Group all features of the same
+type together, and within that group, order by BC alphabetically. This keeps the type-layer
+benefit (no context switching between layers) while keeping BC-local features adjacent.
+
+Example: if BC-A and BC-B both have `core:value-object` features, they appear as:
+`feat-001 core:value-object (BC-A)`, `feat-002 core:value-object (BC-B)`, then
+`feat-003 core:domain-service (BC-A)`, etc.
+
 **Rationale — type ordering as primary, not dependency-first:** Type ordering avoids context
 switching between layers (backend → frontend → backend). A dependency-first ordering with type
 as tiebreaker would allow independent frontend work to start earlier, but for a solo developer
@@ -111,11 +120,24 @@ ensures features are processed in natural bottom-up layer order.
 
 ### Cross-Loop Quality Gate
 
-Runs before every state advance. Non-negotiable.
+Two tiers. Which tier runs depends on whether the state advance is mid-loop or loop-complete.
+
+**Light gate (mid-loop state advances):**
 
 1. `pnpm turbo typecheck` — zero TypeScript errors
 2. `pnpm turbo lint` — zero new ESLint warnings in modified files
-3. All tests in affected package — passing
+3. Tests in the affected package only — `pnpm --filter <affected-package> test`
+
+**Full gate (loop-complete state advances only — V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3, C7):**
+
+1. `pnpm turbo typecheck` — zero TypeScript errors
+2. `pnpm turbo lint` — zero new ESLint warnings in modified files
+3. All tests across all packages — `pnpm turbo test`
+
+**Rationale:** Running full monorepo tests at every mid-loop step is disproportionate for short
+loops (V-loop has 4 advances, M-loop has 4). The light gate catches type and lint regressions
+immediately. The full gate at loop-complete catches cross-package regressions before the feature
+is eligible for `done`. This is the minimum correctness guarantee without the overhead tax.
 
 ### Test DB Availability Check
 
@@ -128,6 +150,32 @@ cd apps/colloquium-api && pnpm prisma db execute --stdin <<< "SELECT 1" 2>/dev/n
 If the command outputs "DB UNAVAILABLE", display: "Test DB is not running — start it before
 activating this feature." and block the loop from proceeding. The connection string is read
 from the `DATABASE_URL` environment variable in `apps/colloquium-api/.env`.
+
+### Cross-Loop Stuck Handling
+
+Every sub-skill must support the `stuck` escape hatch. If a loop cannot advance — a test
+that cannot be made to pass, an external dependency that blocks progress, a design flaw
+discovered mid-loop — the user can reply `stuck: <reason>` at any human checkpoint or
+quality gate failure.
+
+**When `stuck` is triggered:**
+
+1. Record a history entry: `{ type: "stuck", reason: "<reason>", state: "<current-state>" }`
+2. Ask the user via AskUserQuestion:
+   - **"Rollback"** — reset the feature to its initial loop state (e.g., V0, D1, C2).
+     Delete all artifacts written during this loop attempt. The feature re-enters the queue.
+   - **"Remove"** — mark the feature as removed. Add `{ type: "removed", reason: "<reason>" }`
+     to history. The feature is skipped by the queue scanner.
+   - **"Reclassify"** — the feature's type was wrong. Trigger the reclassification flow
+     (see "Feature Reclassification" section).
+   - **"Pause"** — leave the feature at its current state with the stuck history entry.
+     Advance `activeFeature` to the next feature in the queue. The stuck feature can be
+     resumed later by manually setting `activeFeature` back to it.
+3. Update state.json accordingly.
+4. Display: "Feature <feat-id> marked as <choice>. Run /colloquium:sdlc to continue."
+
+This rule applies to ALL 12 loops. Each sub-skill file must document it in its enforcement
+rules section.
 
 ---
 
@@ -212,7 +260,7 @@ C7 → journey check (Playwright E2E if this aggregate is a critical path node)
 done → integrated
 ```
 
-State writes: C0 activation, C2 (spec written, by feature-spec), C3 (tests RED), C4 (domain GREEN + code review), C5 (contract tests), C6 (adapters built), C7 (journey check). Seven writes across lifecycle. `done` written by feature-integrate after feature-verify (C7 → F4 → done).
+State writes: C0 activation, C2 (spec written, by feature-spec), C3 (tests RED), C4 (domain GREEN + code review), C5 (contract tests), C6 (adapters built), C7 (journey check). Seven writes across lifecycle. `done` written by feature-integrate after feature-verify (C7 → UV → done).
 Spec: full spec.md in `docs/features/<BC>/<AggregateName>/spec.md` — unchanged.
 
 ---
@@ -398,11 +446,17 @@ H0 → queued
 H1 → TypeScript interface + JSDoc block written in source file (max 20 lines):
      - State machine (if applicable)
      - Inputs, outputs, external dependencies (CT-NNN, Zustand store, other hook)
-H2 → unit tests for state machine written (pure — no RTL, no QueryClientProvider):
-     - Test each state transition
-     If the hook has no state machine (no `useReducer`, no state enum): write a minimal
-     RTL `renderHook` test asserting the hook's return shape (expected fields with correct
-     types). Never write `expect(true).toBe(true)` — it asserts nothing and must be rejected.
+H2 → pure unit tests written (NO RTL, NO QueryClientProvider — pure TypeScript only):
+     - If the hook has a state machine (`useReducer` or state enum): extract the reducer or
+       state-transition function as a standalone pure function. Test each state transition
+       directly (input state + action → output state). Zero React imports.
+     - If the hook has NO state machine: write a TypeScript type-level contract test that
+       asserts the hook's return type satisfies the expected interface (using `satisfies` or
+       a type assertion helper). Then write a minimal Vitest test that calls the extracted
+       logic (e.g., a transform function, a selector, a default-value factory) — NOT the
+       hook itself. If the hook is pure wiring with no extractable logic, H2 writes the
+       RTL `renderHook` return-shape test (this is the ONLY case where RTL appears at H2).
+     Never write `expect(true).toBe(true)` — it asserts nothing and must be rejected.
      H2 is always required. All tests must FAIL before implementation exists.
 H3 → RTL integration tests written (pattern depends on hook type):
      - TanStack Query hooks: QueryClientProvider + real QueryClient +
@@ -477,23 +531,27 @@ D3 → component implemented per design.md + quality gate + code review:
      Code review checklist: matches design.md? zero inline styles? all D2 tests passing?
      exported correctly?
      (Code review failure → fix in D3, re-run quality gate, re-request review before D4.)
-D4 → Storybook stories written (one per visual state from design.md).
+D4 → visual gate passed (human confirmed).
+     Take a Playwright MCP screenshot of each visual state from design.md.
+     Display each screenshot to the user alongside the corresponding design.md spec.
      **HUMAN CHECKPOINT — hard gate:**
-     Display: "Run Storybook and verify each story against design.md. Reply 'confirmed' when
-     all stories visually match, or 'fix: <description>' to return to D3."
+     Display: "Compare each screenshot against design.md. Reply 'confirmed' when
+     all states visually match, or 'fix: <description>' to return to D3."
      Wait for explicit user confirmation before advancing.
      State write: `"D4"` — written only after user confirms visual check passes.
      If user reports a mismatch: return to D3, fix, re-run tests, re-present D4 gate.
+     If user replies 'redesign: <reason>': reset to D1 — rewrite design.md with the new
+     direction, delete existing RTL tests + implementation, re-enter at D2. This is the
+     escape hatch for when the component's fundamental design (not just visual details)
+     is wrong. State write: `"D1"`, history entry: `{ type: "redesign", reason: "<reason>" }`.
      (loop-complete — feature-integrate transitions to done)
 ```
 
-**Storybook prerequisite:** D4 requires Storybook to be installed and configured. If
-`packages/ui/.storybook/` does not exist, D4 must set up Storybook before writing stories:
-install `@storybook/react`, `@storybook/react-vite`, create minimal `.storybook/main.ts` and
-`.storybook/preview.ts`. This is a one-time setup per project. Alternatively, if Storybook
-setup is not desired, D4 may use Playwright screenshots as the visual gate:
-take a screenshot of each visual state via Playwright MCP, display to user for comparison
-against design.md. The human confirmation step is identical either way.
+**Visual gate method:** D4 always uses Playwright MCP screenshots — no branching. This is
+the universal visual gate because Playwright MCP is always available. If the project also
+uses Storybook, the sub-skill writes Storybook stories as part of D3 (alongside the
+implementation), but the D4 gate itself is always Playwright screenshots + human confirmation.
+This avoids a conditional branch inside the loop.
 
 State writes: D1 (written by feature-spec on approval), D2 (RTL tests), D3 (implementation + code review), D4 (human visual confirmed).
 **Four writes total — D1 in feature-spec, D2/D3/D4 in D-loop.**
@@ -587,13 +645,13 @@ Content of each section is specified in the implementation plan (Task 2).
 
 ### Skills rewritten
 
-| Skill                          | Change                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `colloquium:feature-spec`      | 12-type routing — V/S/F get JSDoc, D invokes ui-design-expert (D0→D1), P gets assembly JSDoc (P0→P1), M/R/Q get no spec.md, E gets table spec.md                                                                                                                                                                                              |
-| `colloquium:feature-implement` | Rewritten as 12-route dispatcher; no loop logic                                                                                                                                                                                                                                                                                               |
-| `colloquium:slice-deliver`     | v3 schema check, 12-type naming, full 12-type decomposition logic (not just aggregate/contract/read-model), sequential ordering rule (no start-gate)                                                                                                                                                                                          |
-| `colloquium:feature-verify`    | Restricted to `core:aggregate` at C7 only; all other types integrate directly                                                                                                                                                                                                                                                                 |
-| `colloquium:feature-integrate` | Sole owner of `"done"` transition for ALL types. Entry states: C7/F4 for aggregate (via feature-verify), loop-complete state for all others (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3). Queue scanner checks type-appropriate initial states. `completedFeatures` written in scoped `"{sliceId}/{featureId}"` format with idempotent append |
+| Skill                          | Change                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `colloquium:feature-spec`      | 12-type routing — V/S/F get JSDoc, D invokes ui-design-expert (D0→D1), P gets assembly JSDoc (P0→P1), M/R/Q get no spec.md, E gets table spec.md                                                                                                                                                                                           |
+| `colloquium:feature-implement` | Rewritten as 12-route dispatcher; no loop logic                                                                                                                                                                                                                                                                                            |
+| `colloquium:slice-deliver`     | v3 schema check, 12-type naming, full 12-type decomposition logic (not just aggregate/contract/read-model), sequential ordering rule (no start-gate)                                                                                                                                                                                       |
+| `colloquium:feature-verify`    | Restricted to `core:aggregate` at C7 only; all other types integrate directly                                                                                                                                                                                                                                                              |
+| `colloquium:feature-integrate` | Sole owner of `"done"` transition for ALL types. Entry states: UV for aggregate (via feature-verify), loop-complete state for all others (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3). Queue scanner checks type-appropriate initial states. `completedFeatures` written in scoped `"{sliceId}/{featureId}"` format with idempotent append |
 
 ### New sub-skills (invoked by dispatcher, not user-facing)
 
@@ -622,6 +680,15 @@ patterns). The current approach is more explicit and harder to get wrong per-typ
 **Mitigation:** Each sub-skill file must include a comment at the top:
 `<!-- Quality gate: see CLAUDE.md § Quality Gate — keep in sync across all 12 sub-skills -->`
 This makes grep-able the shared sections that need coordinated updates.
+
+**v4 trigger condition — when to reconsolidate:** Consider a v4 "loop runner" refactor when
+ANY of these thresholds is crossed:
+
+- A cross-cutting change (e.g., quality gate, state write format, stuck handling) has been
+  applied to all 12 files ≥ 3 times
+- A new loop type is needed (13th type), making the file count clearly unsustainable
+- A bug is found where one sub-skill was missed during a coordinated update
+  Until one of these triggers fires, the 12-file approach is the right trade-off.
 
 ### Deleted
 
@@ -685,7 +752,7 @@ tracked in state.json.
 
 **State code prefixes by loop (loop-complete state in bold):**
 
-- Aggregate: C0, C2, C3, C4, C5, C6, **C7** (then feature-verify → F4 → feature-integrate → done)
+- Aggregate: C0, C2, C3, C4, C5, C6, **C7** (then feature-verify → **UV** → feature-integrate → done)
 - Value Object: V0, V1, V2, V3, **V4**
 - Domain Service: S0, S1, S2, S3, S4, **S5**
 - Migration: M0, M1, M2, M3, **M4**
@@ -706,7 +773,7 @@ tracked in state.json.
 
 | Type                    | Loop-complete state | feature-integrate accepts |
 | ----------------------- | ------------------- | ------------------------- |
-| `core:aggregate`        | C7 (via F4)         | F4 (after feature-verify) |
+| `core:aggregate`        | C7 (via UV)         | UV (after feature-verify) |
 | `core:value-object`     | V4                  | V4                        |
 | `core:domain-service`   | S5                  | S5                        |
 | `backend:migration`     | M4                  | M4                        |
@@ -782,6 +849,19 @@ For each page that assembles hooks + components into a routed view:
 - "CRUD operations" → `backend:repository`
 - "Materialized view" → `backend:projection`
 
+**Frontend splitting criteria (when to create a separate feature vs. inline):**
+
+| Question                                                                                  | If YES → separate feature | If NO → inline in parent            |
+| ----------------------------------------------------------------------------------------- | ------------------------- | ----------------------------------- |
+| Is this component used by ≥ 2 pages or features?                                          | `frontend:component`      | Inline in page                      |
+| Does this component have ≥ 3 visual states (e.g., empty, loading, error, data, selected)? | `frontend:component`      | Inline in page                      |
+| Does this hook manage state for a domain concept (not just a UI toggle)?                  | `frontend:hook`           | Inline `useState` in component/page |
+| Does this hook wrap an API client and add caching/mutation logic?                         | `frontend:hook`           | Call API client directly in page    |
+| Does this page have ≥ 2 distinct user actions (not just "view data")?                     | `frontend:page`           | Consider merging into existing page |
+
+**Default:** When in doubt, inline into the page feature. You can always extract later via
+reclassification. Over-splitting creates dependency chains that slow delivery.
+
 ---
 
 ## Domain Event Type Location
@@ -797,6 +877,12 @@ Domain events are NOT a standalone type in the taxonomy. They are defined as fol
   co-created with the aggregate (C-loop) or consumed by the event handler (E-loop).
   If a shared event schema needs its own type file, create it as a `core:value-object`
   feature (the Zod schema + branded type pattern).
+- **Ownership rule:** The C-loop (aggregate sub-skill) is responsible for creating the event
+  type files at step C5 (adapter layer), alongside the aggregate's command handlers and
+  persistence wiring. The `feature-implement-aggregate.md` sub-skill must include an explicit
+  step: "Create event type files in `packages/<bc>/src/events/` for each domain event emitted
+  by this aggregate." The E-loop (event handler sub-skill) consumes these types — it does
+  NOT create them.
 
 ---
 
@@ -882,7 +968,7 @@ SL-002 had 9 spec.md files. Under new taxonomy: 4 (2 aggregates + 2 API routes).
 ## Success Criteria
 
 1. A `frontend:hook` feature completes in half the time a `core:aggregate` feature takes
-2. A `frontend:component` feature produces a Tailwind-styled component with Storybook stories — not raw HTML
+2. A `frontend:component` feature produces a Tailwind-styled component with a Playwright screenshot visual gate — not raw HTML
 3. API behavior is tested exclusively with `app.request()` — Playwright never asserts an HTTP status code
 4. Event handler behavior is tested via direct handler function call — never via `app.request()` or Playwright
 5. `colloquium:feature-implement` dispatcher reads `feature.type` and routes to one of 12 loops without asking the user

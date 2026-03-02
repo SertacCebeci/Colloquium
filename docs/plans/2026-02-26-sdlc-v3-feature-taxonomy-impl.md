@@ -6,7 +6,7 @@
 state overloading fixed — sub-skills end at loop-complete states, feature-integrate is sole owner
 of "done" transition; C-loop state write count corrected; H-loop write count aligned; P-loop TDD
 language fixed; slice-deliver extended to decompose all 12 types; api-client added to read-model
-reclassification options; completedFeatures idempotent append; Storybook prerequisite for D4;
+reclassification options; completedFeatures idempotent append; Playwright screenshot visual gate for D4;
 page UAT consideration; loop-complete state guard in dispatcher; CLAUDE.md app names fixed;
 cn helper context preserved; Task 7a title corrected; new states V4/S5/M4/R5/Q5/F4 added to
 status.md).
@@ -386,6 +386,16 @@ For each page that assembles hooks + components into a routed view:
 
 - Create one `frontend:page` feature. Dependency: the hooks and components it uses.
 
+**Frontend splitting criteria (when to create a separate feature vs. inline):**
+
+- Component used by ≥ 2 pages → separate `frontend:component` feature
+- Component with ≥ 3 visual states → separate `frontend:component` feature
+- Hook managing domain state (not just a UI toggle) → separate `frontend:hook` feature
+- Hook wrapping API client with caching/mutation → separate `frontend:hook` feature
+- Page with ≥ 2 distinct user actions → separate `frontend:page` feature
+- **Default:** When in doubt, inline into the page feature. Over-splitting creates dependency
+  chains that slow delivery. Extract later via reclassification if needed.
+
 ### Legacy type conversion (for partially migrated slices)
 
 - `type: "aggregate"` → `type: "core:aggregate"`
@@ -405,6 +415,9 @@ Assign feature order using this precedence chain:
 
 `activeFeature` is a single pointer. One feature executes at a time. The pointer advances
 only when the current feature reaches `done` (set by feature-integrate) — there is no start-gate.
+
+**Multi-BC sort:** Within each type tier, sort features alphabetically by BC name. This keeps
+same-type features grouped while keeping BC-local features adjacent.
 
 Set `activeFeature` to the first feature in the precedence-ordered queue.
 ```
@@ -649,6 +662,27 @@ git commit -m "feat(sdlc): make feature-spec type-aware — 12-type routing"
 
 Write each file in order. All are invoked by the dispatcher (Task 8), not by the user directly.
 
+**Cross-cutting: quality gate tiers.** Every sub-skill has two quality gate tiers:
+
+- **Light gate** (mid-loop advances): `pnpm turbo typecheck` + `pnpm turbo lint` + `pnpm --filter <affected-package> test`
+- **Full gate** (loop-complete advance ONLY): `pnpm turbo typecheck` + `pnpm turbo lint` + `pnpm turbo test` (all packages)
+
+When the sub-skill descriptions below say "quality gate", use the light gate. The final
+state advance (to loop-complete) uses the full gate. This distinction is critical for keeping
+short loops (V-loop, M-loop) fast.
+
+**Cross-cutting: stuck handling.** Every sub-skill file must include this in its Enforcement Rules:
+
+```markdown
+N. **Stuck escape hatch.** At any human checkpoint or quality gate failure, if the user
+replies `stuck: <reason>`, trigger the stuck-handling flow:
+
+- Record history entry: `{ type: "stuck", reason: "<reason>", state: "<current>" }`
+- Ask via AskUserQuestion: Rollback (reset to initial loop state), Remove (skip feature),
+  Reclassify (change feature type), or Pause (advance to next feature, resume later).
+- Update state.json. Display: "Feature <feat-id> marked as <choice>. Run /colloquium:sdlc."
+```
+
 ---
 
 ### Task 7a: `feature-implement-aggregate.md`
@@ -672,12 +706,23 @@ Changes to make:
 5. Add quality gate block after each implementation sub-step (C3→C4, C5→C6, C6→C7):
 
 ```markdown
-**Quality gate (before state write):**
+**Light gate (mid-loop state advances):**
 
 - `pnpm turbo typecheck` → zero errors
 - `pnpm turbo lint` → zero new warnings
 - `pnpm --filter <affected-package> test` → all passing
+
+**Full gate (loop-complete state advance only — e.g., C7 for aggregates):**
+
+- `pnpm turbo typecheck` → zero errors
+- `pnpm turbo lint` → zero new warnings
+- `pnpm turbo test` → all tests across all packages passing
 ```
+
+6. Add explicit domain event creation step at C5: "Create event type files in
+   `packages/<bc>/src/events/` for each domain event emitted by this aggregate. Export
+   from the package index. These types are consumed by `backend:event-handler` features —
+   the aggregate is the sole creator."
 
 Commit:
 
@@ -1574,14 +1619,18 @@ State write: `"D3"`.
 
 ---
 
-## D3 → D4: Storybook Stories + Human Visual Gate
+## D3 → D4: Playwright Screenshot Visual Gate
 
-1. Write Storybook stories — one per visual state from design.md.
-2. **HUMAN CHECKPOINT — hard gate:**
-   Display: "Run Storybook and verify each story against design.md. Reply 'confirmed' when
-   all stories visually match, or 'fix: <description>' to return to D3."
-3. Wait for explicit user confirmation before advancing.
-4. If user reports a mismatch: return to D3, fix, re-run tests, re-present D4 gate.
+1. Take a Playwright MCP screenshot of each visual state from design.md.
+2. Display each screenshot to the user alongside the corresponding design.md spec.
+3. **HUMAN CHECKPOINT — hard gate:**
+   Display: "Compare each screenshot against design.md. Reply 'confirmed' when
+   all states visually match, or 'fix: <description>' to return to D3."
+4. Wait for explicit user confirmation before advancing.
+5. If user reports a mismatch: return to D3, fix, re-run tests, re-present D4 gate.
+6. If user replies `redesign: <reason>`: reset to D1 — rewrite design.md with the new
+   direction, delete existing RTL tests + implementation, re-enter at D2. Write state `"D1"`,
+   add history entry `{ type: "redesign", reason: "<reason>" }`.
 
 State write: `"D4"` — written only after user confirms visual check passes.
 
@@ -1911,7 +1960,7 @@ Stop.
 Announce: "Type is `<type>` — routing to `<skill-name>`."
 
 **Loop-complete state guard:** If `currentFeature.state` is the loop-complete state for its
-type (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3 — or C7/F4 for aggregates), do NOT
+type (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3 — or C7/UV for aggregates), do NOT
 dispatch to a sub-skill. Display: "Feature is at loop-complete state <state> — run
 /colloquium:feature-integrate (or /colloquium:feature-verify for aggregates at C7)." Stop.
 
@@ -1948,6 +1997,12 @@ Run /colloquium:feature-integrate instead."
 Stop.
 ```
 
+**Step 3:** Replace the state write from `"F4"` to `"UV"` (UAT Verified).
+
+Find the state write block that sets `currentFeature.state = "F4"` and change it to `"UV"`.
+This eliminates the state code collision with `frontend:api-client`'s F4 (loop-complete).
+The `UV` state code is unique to the aggregate UAT verification path.
+
 Commit:
 
 ```bash
@@ -1977,7 +2032,7 @@ Entry state enforcement by type:
 
 | Type                    | Required entry state                    |
 | ----------------------- | --------------------------------------- |
-| `core:aggregate`        | `"F4"` (set by feature-verify after C7) |
+| `core:aggregate`        | `"UV"` (set by feature-verify after C7) |
 | `core:value-object`     | `"V4"`                                  |
 | `core:domain-service`   | `"S5"`                                  |
 | `backend:migration`     | `"M4"`                                  |
@@ -1995,8 +2050,8 @@ Display: "Feature is not at loop-complete state — expected <expected> but got 
 Finish all loop steps before integrating."
 Stop.
 
-Note: `frontend:api-client` at F4 and `core:aggregate` at F4 share the same state code
-but arrive there via different paths (F-loop vs feature-verify). The type field disambiguates.
+Note: `frontend:api-client` uses F4 as its loop-complete state. `core:aggregate` uses UV
+(set by feature-verify). No collision — each type has a unique loop-complete state code.
 ```
 
 **Step 2:** Update the queue advance logic.
@@ -2127,7 +2182,7 @@ Read `currentFeature.type` and `currentFeature.state`.
 | `core:aggregate` (or legacy `aggregate`) | C0     | `feature-spec`                                                 |
 | `core:aggregate`                         | C2–C6  | `feature-implement` (dispatcher routes to aggregate sub-skill) |
 | `core:aggregate`                         | C7     | `feature-verify` (UAT gate before integration)                 |
-| `core:aggregate`                         | F4     | `feature-integrate`                                            |
+| `core:aggregate`                         | UV     | `feature-integrate`                                            |
 | `core:value-object`                      | V0     | `feature-spec`                                                 |
 | `core:value-object`                      | V1–V3  | `feature-implement`                                            |
 | `core:value-object`                      | V4     | `feature-integrate` (loop-complete)                            |
@@ -2255,6 +2310,7 @@ Read the file first. The status dashboard needs to display descriptions for all 
 | P1    | Assembly plan approved                  |
 | P2    | RTL tests written                       |
 | P3    | Playwright E2E done                     |
+| UV    | UAT verified (aggregate only)           |
 | C0–C7 | (Unchanged — aggregate states)          |
 ```
 
@@ -2327,7 +2383,27 @@ Loop-complete states (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) must route to 
 **Step 9:** Verify `status.md` state descriptions:
 Read `status.md` — confirm all new state codes have descriptions.
 
-**Step 10:** Invoke `superpowers:verification-before-completion` before declaring done.
+**Step 10: Dry-run validation — push a throwaway feature through the dispatcher.**
+
+This is the only step that actually tests the system end-to-end. All previous steps are
+static file checks.
+
+1. **Create a throwaway feature in state.json.** Pick the simplest loop (`core:value-object`).
+   Add a feature entry with `type: "core:value-object"`, `state: "V0"`, `name: "dry-run-test"`.
+   Set `activeFeature` to point at it.
+2. **Invoke `/colloquium:sdlc`.** Verify it:
+   - Reads state.json correctly
+   - Displays the current position banner with the V0 state
+   - Routes to `feature-spec` (because V0 is the initial state)
+3. **Verify feature-spec handles the type.** It should recognize `core:value-object` and
+   present the V-loop spec template. Do NOT complete the spec — just verify routing works.
+4. **Clean up.** Remove the throwaway feature from state.json. Restore `activeFeature` to its
+   previous value.
+
+If the dry-run fails at any point, the dispatcher or sub-skill has a bug. Fix it before
+declaring v3 complete.
+
+**Step 11:** Invoke `superpowers:verification-before-completion` before declaring done.
 
 **Final commit:**
 
@@ -2346,14 +2422,15 @@ git commit -m "feat(sdlc): complete v3 taxonomy — dispatcher + 12 loops + type
 - [ ] `feature-implement.md` is the dispatcher (no loop logic), routes 12 types; blocks any feature already at a loop-complete state (routes to `feature-integrate` instead)
 - [ ] 12 sub-skill files exist: aggregate, value-object, domain-service, migration, api, event-handler, repository, projection, hook, api-client, component, page
 - [ ] Each sub-skill writes a **loop-complete** state (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) — **never** writes "done"
+- [ ] Each sub-skill includes stuck escape hatch (`stuck: <reason>`) with rollback/remove/reclassify/pause options
 - [ ] `feature-spec.md` routes by type (12 branches including D0→D1 via ui-design-expert, P0→P1, F0→F1)
 - [ ] `feature-verify.md` enforces C7 / core:aggregate only (UAT hard gate for the C-loop)
 - [ ] `slice-deliver.md` decomposes all 12 types (core, backend, frontend); uses compound types + sequential ordering rule (no start-gate); queue scanner uses type-appropriate initial states
-- [ ] `feature-integrate.md` accepts **loop-complete states** (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) and F4 (aggregate UAT); is the **sole owner** of the `done` transition; queue scanner checks type-appropriate initial states; completedFeatures written in scoped format with duplicate guard
-- [ ] `feature-implement-component.md` enforces entry at D1, blocks D0; code review at D3 before D4 (loop-complete)
+- [ ] `feature-integrate.md` accepts **loop-complete states** (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) and UV (aggregate UAT); is the **sole owner** of the `done` transition; queue scanner checks type-appropriate initial states; completedFeatures written in scoped format with duplicate guard
+- [ ] `feature-implement-component.md` enforces entry at D1, blocks D0; code review at D3 before D4; D4 uses Playwright MCP screenshots (no Storybook branch); D4 is loop-complete
 - [ ] `feature-implement-page.md` enforces entry at P1, blocks P0; P3 is loop-complete (assembly-first, not TDD)
 - [ ] `feature-implement-hook.md` is React-hooks-only; H2 always asserts something real (no expect(true).toBe(true)); H4 is loop-complete
 - [ ] `feature-implement-api-client.md` exists; uses vi.spyOn(globalThis, 'fetch'); no RTL; F4 is loop-complete
 - [ ] If `simulate.md` exists, its routing tables match feature-implement.md dispatcher exactly (12 types)
-- [ ] `sdlc.md` routing table handles all v3 state codes including loop-complete states (V0–V4, S0–S5, M0–M4, A0–A4, E0–E4, R0–R5, Q0–Q5, H0–H4, F0–F4, D0–D4, P0–P3 + legacy C0–C7 + F4); loop-complete states route to `feature-integrate`
-- [ ] `status.md` state description table covers all new state codes including loop-complete states (V4, S5, M4, R5, Q5, F4)
+- [ ] `sdlc.md` routing table handles all v3 state codes including loop-complete states (V0–V4, S0–S5, M0–M4, A0–A4, E0–E4, R0–R5, Q0–Q5, H0–H4, F0–F4, D0–D4, P0–P3 + legacy C0–C7 + UV); loop-complete states route to `feature-integrate`
+- [ ] `status.md` state description table covers all new state codes including loop-complete states (V4, S5, M4, R5, Q5, F4, UV)
