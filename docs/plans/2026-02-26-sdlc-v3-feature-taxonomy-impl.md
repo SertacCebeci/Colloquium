@@ -2,14 +2,14 @@
 
 > **For Claude:** Use `superpowers:executing-plans` to implement this plan task-by-task.
 
-**Revised:** 2026-03-02 — v5 review findings applied (all previous revisions preserved; v5: "done"
-state overloading fixed — sub-skills end at loop-complete states, feature-integrate is sole owner
-of "done" transition; C-loop state write count corrected; H-loop write count aligned; P-loop TDD
-language fixed; slice-deliver extended to decompose all 12 types; api-client added to read-model
-reclassification options; completedFeatures idempotent append; Playwright screenshot visual gate for D4;
-page UAT consideration; loop-complete state guard in dispatcher; CLAUDE.md app names fixed;
-cn helper context preserved; Task 7a title corrected; new states V4/S5/M4/R5/Q5/F4 added to
-status.md).
+**Revised:** 2026-03-03 — v6 adversarial review fixes applied (all v1–v5 revisions preserved; v6:
+hook location split (packages/ui vs apps/\*/src/hooks based on api-client dependency), dependency
+check restored in queue scanner, api-client state mapping added to migration tables, done-state
+crash recovery pass-through in feature-integrate, C6 redefined as aggregate-internal wiring,
+D4 visual harness rendering strategy for isolated components, V/S-loop package scaffold ownership,
+H3→H4 convention check fully specified, mid-loop reclassification resets to initial state,
+F0 block in api-client sub-skill, v4 trigger threshold adjusted, dry-run expanded to 3 families,
+P-loop TDD exception documented, testing never column clarified, CLAUDE.md ceiling 250).
 
 **Goal:** Replace the 3-type flat feature model with a 12-type `{domain}:{type}:{name}` taxonomy,
 each with an invariant loop, eliminating the "DDD loop applied to React hooks" problem from SL-002.
@@ -96,20 +96,20 @@ Remove entirely:
 
 All features: `{domain}:{type}:{kebab-name}`
 
-| Type                    | Loop   | Location                                   |
-| ----------------------- | ------ | ------------------------------------------ |
-| `core:aggregate`        | C-loop | `packages/<bc-name>/`                      |
-| `core:value-object`     | V-loop | `packages/<bc-name>/` or `packages/utils/` |
-| `core:domain-service`   | S-loop | `packages/<bc-name>/`                      |
-| `backend:migration`     | M-loop | `apps/colloquium-api/prisma/`              |
-| `backend:api`           | A-loop | `apps/colloquium-api/`                     |
-| `backend:event-handler` | E-loop | `apps/colloquium-api/`                     |
-| `backend:repository`    | R-loop | `apps/colloquium-api/`                     |
-| `backend:projection`    | Q-loop | `apps/colloquium-api/`                     |
-| `frontend:api-client`   | F-loop | `apps/*/src/api/`                          |
-| `frontend:hook`         | H-loop | `packages/ui/src/hooks/`                   |
-| `frontend:component`    | D-loop | `packages/ui/src/ComponentName/`           |
-| `frontend:page`         | P-loop | `apps/*/src/pages/`                        |
+| Type                    | Loop   | Location                                        |
+| ----------------------- | ------ | ----------------------------------------------- |
+| `core:aggregate`        | C-loop | `packages/<bc-name>/`                           |
+| `core:value-object`     | V-loop | `packages/<bc-name>/` or `packages/utils/`      |
+| `core:domain-service`   | S-loop | `packages/<bc-name>/`                           |
+| `backend:migration`     | M-loop | `apps/colloquium-api/prisma/`                   |
+| `backend:api`           | A-loop | `apps/colloquium-api/`                          |
+| `backend:event-handler` | E-loop | `apps/colloquium-api/`                          |
+| `backend:repository`    | R-loop | `apps/colloquium-api/`                          |
+| `backend:projection`    | Q-loop | `apps/colloquium-api/`                          |
+| `frontend:api-client`   | F-loop | `apps/*/src/api/`                               |
+| `frontend:hook`         | H-loop | `packages/ui/src/hooks/` OR `apps/*/src/hooks/` |
+| `frontend:component`    | D-loop | `packages/ui/src/ComponentName/`                |
+| `frontend:page`         | P-loop | `apps/*/src/pages/`                             |
 
 **Ordering rule (sequential — `activeFeature` is a single pointer):**
 `core:value-object → core:domain-service → core:aggregate → backend:migration → backend:repository → backend:projection → backend:api → backend:event-handler → frontend:api-client → frontend:hook → frontend:component → frontend:page`
@@ -122,23 +122,23 @@ All features: `{domain}:{type}:{kebab-name}`
 
 **The "Never" column is law.**
 
-| Type                    | Tool                                     | What to test                                      | Never                         |
-| ----------------------- | ---------------------------------------- | ------------------------------------------------- | ----------------------------- |
-| `core:aggregate`        | Vitest, zero mocks                       | Invariants, state transitions                     | I/O, network                  |
-| `core:value-object`     | Vitest, zero mocks                       | Valid/invalid construction, equality              | I/O, mocks                    |
-| `core:domain-service`   | Vitest, vi.fn() mocks                    | Method behavior given mocked deps                 | I/O, real deps                |
-| `backend:migration`     | Real test DB (manual verify)             | Schema correctness, rollback                      | Unit mocks                    |
-| `backend:api`           | Hono `app.request()`                     | Auth, validation, error mapping                   | Playwright                    |
-| `backend:event-handler` | Direct handler call                      | Schema rejection, happy path                      | app.request(), Playwright     |
-| `backend:repository`    | Vitest + test DB                         | CRUD, transactions, not-found                     | Unit mocks of DB              |
-| `backend:projection`    | Vitest + test DB                         | Event sequence → materialized state               | Unit mocks                    |
-| `frontend:hook`         | RTL + QueryClientProvider                | State transitions, error handling                 | Visual rendering, fetch calls |
-| `frontend:api-client`   | Vitest + `vi.spyOn(globalThis, 'fetch')` | Request encoding, response decoding, error shapes | RTL, QueryClientProvider      |
-| `frontend:component`    | RTL (hooks mocked)                       | Render, interaction, conditionals                 | Hook logic                    |
-| `frontend:page`         | Playwright                               | Critical user paths                               | API status codes              |
+| Type                    | Tool                                     | What to test                                      | Never                                                      |
+| ----------------------- | ---------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
+| `core:aggregate`        | Vitest, zero mocks                       | Invariants, state transitions                     | I/O, network                                               |
+| `core:value-object`     | Vitest, zero mocks                       | Valid/invalid construction, equality              | I/O, mocks                                                 |
+| `core:domain-service`   | Vitest, vi.fn() mocks                    | Method behavior given mocked deps                 | I/O, real deps                                             |
+| `backend:migration`     | Real test DB (manual verify)             | Schema correctness, rollback                      | Unit mocks                                                 |
+| `backend:api`           | Hono `app.request()`                     | Auth, validation, error mapping                   | Playwright                                                 |
+| `backend:event-handler` | Direct handler call                      | Schema rejection, happy path                      | app.request(), Playwright                                  |
+| `backend:repository`    | Vitest + test DB                         | CRUD, transactions, not-found                     | Unit mocks of DB                                           |
+| `backend:projection`    | Vitest + test DB                         | Event sequence → materialized state               | Unit mocks                                                 |
+| `frontend:hook`         | RTL + QueryClientProvider                | State transitions, error handling                 | Visual rendering, fetch calls                              |
+| `frontend:api-client`   | Vitest + `vi.spyOn(globalThis, 'fetch')` | Request encoding, response decoding, error shapes | RTL, QueryClientProvider                                   |
+| `frontend:component`    | RTL (hooks mocked)                       | Render, interaction, conditionals                 | Hook logic                                                 |
+| `frontend:page`         | Playwright                               | Critical user paths                               | API response codes (200/401/500 — that's the A-loop's job) |
 
-API behavior is **never** tested through Playwright.
-Event handler behavior is **never** tested through `app.request()`.
+API behavior is **never** tested through Playwright — use `app.request()` in the A-loop.
+Event handler behavior is **never** tested through `app.request()` — use direct handler calls in the E-loop.
 ```
 
 **Step 4: Append Quality Gate section**
@@ -161,7 +161,8 @@ Runs before every state advance. No exceptions.
 ```
 Value objects / policies → packages/<bc>/src/<Name>.ts
 Domain services          → packages/<bc>/src/<Name>Service.ts
-Domain hooks             → packages/ui/src/hooks/use<Name>.ts
+Pure UI hooks            → packages/ui/src/hooks/use<Name>.ts
+API-wrapping hooks       → apps/*/src/hooks/use<Name>.ts
 UI components            → packages/ui/src/ComponentName/ComponentName.tsx
 shadcn components        → packages/ui/src/components/ui/
 API routes               → apps/colloquium-api/src/routes/<resource>.ts
@@ -197,6 +198,7 @@ Component designs        → docs/features/<BC>/<ComponentName>/design.md
 - Class merging: `cn` always from `@colloquium/ui` (clsx + tailwind-merge — handles class conflicts). `@colloquium/utils` has a DIFFERENT `cn` (simple string join — NOT Tailwind-aware). Never use the utils version in components.
 - Shadcn check: verify `packages/ui/src/components/ui/` before building any custom primitive
 - Hook returns: named state values (`state: "Idle" | "Loading" | ...`), not boolean flags
+- Hook location: pure UI hooks in `packages/ui/src/hooks/`, hooks wrapping `frontend:api-client` in `apps/*/src/hooks/` (prevents packages/ui from importing app-level API contracts)
 ```
 
 **Step 8: Verify final line count**
@@ -205,7 +207,7 @@ Component designs        → docs/features/<BC>/<ComponentName>/design.md
 wc -l CLAUDE.md
 ```
 
-Must be ≤ 200. If over: tighten new sections (drop redundant words, collapse table rows).
+Must be ≤ 250. If over: tighten new sections (drop redundant words, collapse table rows).
 Do not remove substantive content.
 
 **Step 9:** Commit:
@@ -270,13 +272,13 @@ Reclassify each "contract" feature manually before running /colloquium:feature-i
    feature that is NOT at `done` state, the C-state must be mapped to the new loop's equivalent
    state. After the user provides the new type, apply this mapping:
 
-   | Legacy state | → backend:api | → backend:event-handler | → frontend:hook | → frontend:component | → frontend:page |
-   | ------------ | ------------- | ----------------------- | --------------- | -------------------- | --------------- |
-   | C0           | A0            | E0                      | H0              | D0                   | P0              |
-   | C2           | A1            | E1                      | H1              | D1                   | P1              |
-   | C3–C4        | A2            | E2                      | H2              | D2                   | P2              |
-   | C5–C6        | A3            | E3                      | H3              | D3                   | P3              |
-   | C7           | A4            | E4                      | H4              | D3                   | P3              |
+   | Legacy state | → backend:api | → backend:event-handler | → frontend:hook | → frontend:component | → frontend:page | → frontend:api-client |
+   | ------------ | ------------- | ----------------------- | --------------- | -------------------- | --------------- | --------------------- |
+   | C0           | A0            | E0                      | H0              | D0                   | P0              | F0                    |
+   | C2           | A1            | E1                      | H1              | D1                   | P1              | F1                    |
+   | C3–C4        | A2            | E2                      | H2              | D2                   | P2              | F2                    |
+   | C5–C6        | A3            | E3                      | H3              | D3                   | P3              | F3                    |
+   | C7           | A4            | E4                      | H4              | D3                   | P3              | F4                    |
 
    Write the mapped state to state.json. Display a warning:
    "State mapped from legacy C-state <old> → <new>. The mapping is approximate — review the
@@ -441,7 +443,10 @@ Replace any check for `state = "C0"` with a check for the type-appropriate initi
 | `frontend:page`         | `"P0"`                 |
 
 The queue scanner should set `activeFeature` to the first feature (in precedence order)
-whose state equals the type-appropriate initial state listed above.
+whose state equals the type-appropriate initial state listed above **AND all entries in its
+`dependencies` array exist in `completedFeatures`**. The dependency check is mandatory —
+type ordering alone does not prevent intra-type dependency violations (e.g., two value objects
+where one depends on the other).
 
 **Step 4:** Update the example feature JSON in the state write step:
 
@@ -680,6 +685,12 @@ replies `stuck: <reason>`, trigger the stuck-handling flow:
 - Record history entry: `{ type: "stuck", reason: "<reason>", state: "<current>" }`
 - Ask via AskUserQuestion: Rollback (reset to initial loop state), Remove (skip feature),
   Reclassify (change feature type), or Pause (advance to next feature, resume later).
+- **Reclassify behavior:** Mid-loop reclassification always resets to the new loop's initial
+  state (e.g., H3 → reclassify as `frontend:component` → D0). All artifacts from the old loop
+  are deleted. Progress is lost but the state is deterministic. The `--migrate-v3` mapping
+  tables are for legacy C-state migration only and do NOT apply here. Ask the user for the new
+  type, write the new type + initial state to state.json, add history entry
+  `{ type: "reclassify", from: "<old-type>", to: "<new-type>", reason: "<reason>" }`.
 - Update state.json. Display: "Feature <feat-id> marked as <choice>. Run /colloquium:sdlc."
 ```
 
@@ -723,6 +734,12 @@ Changes to make:
    `packages/<bc>/src/events/` for each domain event emitted by this aggregate. Export
    from the package index. These types are consumed by `backend:event-handler` features —
    the aggregate is the sole creator."
+7. **Redefine C6** — replace any "adapters built (repository, HTTP handler, projection)" language
+   with: "C6 → aggregate-internal wiring: domain event type files (if not done at C5), command
+   handler port interfaces, in-process event publisher integration. NOT: repository implementation
+   (R-loop), HTTP handler (A-loop), projection (Q-loop) — those are separate features in v3."
+   Remove any code that builds Prisma repositories, Hono route handlers, or projections at C6 —
+   these are now handled by their own loops (R/A/Q).
 
 Commit:
 
@@ -773,6 +790,12 @@ Jump to sub-step matching current state.
 ---
 
 ## V1 → V2: Write Signature + JSDoc in Source File
+
+**Package scaffold check:** Before writing the source file, check if `packages/<bc-name>/`
+exists. If absent (first core feature in a new BC), create the package scaffold:
+`package.json` (name: `@colloquium/<bc-kebab>`), `tsconfig.json` (extends shared config),
+`src/index.ts` (barrel export). Add to turbo pipeline. Run `pnpm install` to link the new
+package. This is a one-time setup per BC.
 
 Write the type or function signature in the source file. The JSDoc IS the documentation.
 
@@ -890,6 +913,9 @@ File: packages/<bc>/src/<Name>Service.ts
 ---
 
 ## S1 → S2: Write TypeScript Interface + JSDoc
+
+**Package scaffold check:** Same as V-loop — if `packages/<bc-name>/` does not exist, create
+the package scaffold before writing the source file (see V1→V2 for details).
 
 ```typescript
 /**
@@ -1512,6 +1538,20 @@ Write from scratch. Key constraints for this version:
 
 The loop header and session start display follow the pattern of other sub-skills.
 
+The sub-skill must include explicit sections for H1→H2, H2→H3, and H3→H4.
+
+**H3 → H4: Convention Check + Full Gate**
+
+1. Run all tests (H2 pure tests + H3 RTL tests must be GREEN).
+2. Verify convention checklist:
+   - Exported from `packages/ui/src/index.ts` (or `apps/*/src/hooks/` if api-client-dependent)?
+   - TypeScript interface (hook params + return type) exported as a named type?
+   - Returns named state values (`state: "Idle" | "Loading" | ...`), not boolean flags?
+   - JSDoc block in source file matches the H1 template?
+3. If any convention item fails: fix in-place, re-run tests, re-check conventions.
+   Do NOT reset state — H4 is a fix-and-verify checkpoint, not a restart point.
+4. Quality gate (full gate — `pnpm turbo test` all packages).
+
 H4 is loop-complete. Write state.json with `"H4"`. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 Display:
@@ -1605,14 +1645,20 @@ Quality gate on test files. State write: `"D2"`.
    - shadcn/ui primitives as specified
    - Zero inline styles
    - Export from `packages/ui/src/index.ts`
-2. Run RTL tests — all must pass.
-3. Quality gate: `pnpm turbo typecheck` + `pnpm turbo lint` +
+2. **Generate visual harness** for D4 screenshots: create
+   `packages/ui/src/<ComponentName>/__visual__/<ComponentName>.visual.tsx` that renders each
+   visual state from design.md as a separate labeled section. This file is the Playwright
+   rendering target (components don't have routes). If the project uses Storybook, write
+   Storybook stories instead and skip the harness file.
+3. Run RTL tests — all must pass.
+4. Quality gate: `pnpm turbo typecheck` + `pnpm turbo lint` +
    `pnpm --filter @colloquium/ui test`.
-4. Code review checklist:
+5. Code review checklist:
    - Matches design.md?
    - Zero inline styles?
    - All D2 tests passing?
    - Exported correctly from package index?
+   - Visual harness renders all states from design.md?
 
 Code review failure → fix in D3, re-run quality gate, re-request review before D4.
 State write: `"D3"`.
@@ -1621,8 +1667,12 @@ State write: `"D3"`.
 
 ## D3 → D4: Playwright Screenshot Visual Gate
 
-1. Take a Playwright MCP screenshot of each visual state from design.md.
-2. Display each screenshot to the user alongside the corresponding design.md spec.
+1. Start Vite dev server if not running (`pnpm --filter @colloquium/ui dev`).
+   Navigate Playwright to the visual harness file generated at D3
+   (`packages/ui/src/<ComponentName>/__visual__/<ComponentName>.visual.tsx`).
+   If using Storybook, navigate to the Storybook story instead.
+2. Take a Playwright MCP screenshot of each visual state section in the harness.
+3. Display each screenshot to the user alongside the corresponding design.md spec.
 3. **HUMAN CHECKPOINT — hard gate:**
    Display: "Compare each screenshot against design.md. Reply 'confirmed' when
    all states visually match, or 'fix: <description>' to return to D3."
@@ -1801,6 +1851,8 @@ Tests use `vi.spyOn(globalThis, 'fetch')`. Invoked by dispatcher.
 1. Read state.json. Resolve context (v3 cursor).
    Require `feature.type = "frontend:api-client"`.
    Require `feature.state` ∈ {F1, F2, F3, F4}.
+2. If `feature.state = "F0"`: display "JSDoc template not approved — run
+   /colloquium:feature-spec first to generate and approve the JSDoc template." Stop.
 
 ---
 
@@ -2030,22 +2082,28 @@ Sub-skills advance to their loop-complete state; feature-integrate transitions t
 
 Entry state enforcement by type:
 
-| Type                    | Required entry state                    |
-| ----------------------- | --------------------------------------- |
-| `core:aggregate`        | `"UV"` (set by feature-verify after C7) |
-| `core:value-object`     | `"V4"`                                  |
-| `core:domain-service`   | `"S5"`                                  |
-| `backend:migration`     | `"M4"`                                  |
-| `backend:api`           | `"A4"`                                  |
-| `backend:event-handler` | `"E4"`                                  |
-| `backend:repository`    | `"R5"`                                  |
-| `backend:projection`    | `"Q5"`                                  |
-| `frontend:hook`         | `"H4"`                                  |
-| `frontend:api-client`   | `"F4"`                                  |
-| `frontend:component`    | `"D4"`                                  |
-| `frontend:page`         | `"P3"`                                  |
+| Type                    | Required entry state                           |
+| ----------------------- | ---------------------------------------------- |
+| `core:aggregate`        | `"UV"` (set by feature-verify after C7)        |
+| `core:value-object`     | `"V4"`                                         |
+| `core:domain-service`   | `"S5"`                                         |
+| `backend:migration`     | `"M4"`                                         |
+| `backend:api`           | `"A4"`                                         |
+| `backend:event-handler` | `"E4"`                                         |
+| `backend:repository`    | `"R5"`                                         |
+| `backend:projection`    | `"Q5"`                                         |
+| `frontend:hook`         | `"H4"`                                         |
+| `frontend:api-client`   | `"F4"`                                         |
+| `frontend:component`    | `"D4"`                                         |
+| `frontend:page`         | `"P3"`                                         |
+| (any type)              | `"done"` (crash recovery — no-op pass-through) |
 
-If `currentFeature.state` does not match the expected entry state for its type:
+If `currentFeature.state = "done"`: this is a crash recovery scenario where feature-integrate
+wrote `done` but crashed before advancing `activeFeature`. Skip the integration checklist
+(already completed), skip the `done` write (already written), proceed directly to the queue
+advance step. This makes feature-integrate idempotent for already-done features.
+
+If `currentFeature.state` does not match the expected entry state for its type AND is not `"done"`:
 Display: "Feature is not at loop-complete state — expected <expected> but got <actual>.
 Finish all loop steps before integrating."
 Stop.
@@ -2075,7 +2133,8 @@ check for `state = "C0"` with a check for the type-appropriate initial state:
 | `frontend:page`         | `"P0"`                 |
 
 The scanner sets `activeFeature` to the first feature (in precedence order) whose state
-equals the type-appropriate initial state listed above (i.e., queued and not yet started).
+equals the type-appropriate initial state listed above (i.e., queued and not yet started)
+**AND all entries in its `dependencies` array exist in `completedFeatures`**.
 
 **Step 3:** Fix the `completedFeatures` write step.
 
@@ -2354,7 +2413,7 @@ cat .claude/sdlc/state.json | python3 -m json.tool > /dev/null && echo "Valid JS
 
 ```bash
 wc -l CLAUDE.md
-# Must be ≤ 200
+# Must be ≤ 250
 ```
 
 **Step 5:** Verify deprecated skill is gone:
@@ -2383,25 +2442,53 @@ Loop-complete states (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) must route to 
 **Step 9:** Verify `status.md` state descriptions:
 Read `status.md` — confirm all new state codes have descriptions.
 
-**Step 10: Dry-run validation — push a throwaway feature through the dispatcher.**
+**Step 10: Dry-run validation — route-test three loop families through the dispatcher.**
 
 This is the only step that actually tests the system end-to-end. All previous steps are
-static file checks.
+static file checks. A single routing test is insufficient for 12 loops and ~50 state transitions.
+Test one representative from each loop family (core, backend, frontend).
 
-1. **Create a throwaway feature in state.json.** Pick the simplest loop (`core:value-object`).
-   Add a feature entry with `type: "core:value-object"`, `state: "V0"`, `name: "dry-run-test"`.
+**10a. Core family — `core:value-object`:**
+
+1. Create a throwaway feature: `type: "core:value-object"`, `state: "V0"`, `name: "dry-run-vo"`.
    Set `activeFeature` to point at it.
-2. **Invoke `/colloquium:sdlc`.** Verify it:
-   - Reads state.json correctly
-   - Displays the current position banner with the V0 state
-   - Routes to `feature-spec` (because V0 is the initial state)
-3. **Verify feature-spec handles the type.** It should recognize `core:value-object` and
-   present the V-loop spec template. Do NOT complete the spec — just verify routing works.
-4. **Clean up.** Remove the throwaway feature from state.json. Restore `activeFeature` to its
-   previous value.
+2. Invoke `/colloquium:sdlc`. Verify: routes to `feature-spec`, recognizes `core:value-object`.
+3. Manually set state to `"V2"` (mid-loop). Invoke `/colloquium:sdlc`. Verify: routes to
+   `feature-implement`, dispatcher routes to `feature-implement-value-object`.
+4. Manually set state to `"V4"` (loop-complete). Invoke `/colloquium:sdlc`. Verify: routes to
+   `feature-integrate`.
 
-If the dry-run fails at any point, the dispatcher or sub-skill has a bug. Fix it before
-declaring v3 complete.
+**10b. Backend family — `backend:api`:**
+
+1. Create a throwaway feature: `type: "backend:api"`, `state: "A0"`, `name: "dry-run-api"`.
+2. Invoke `/colloquium:sdlc`. Verify: routes to `feature-spec`, recognizes `backend:api`.
+3. Manually set state to `"A2"`. Invoke `/colloquium:sdlc`. Verify: routes to
+   `feature-implement`, dispatcher routes to `feature-implement-api`.
+4. Manually set state to `"A4"`. Invoke `/colloquium:sdlc`. Verify: routes to `feature-integrate`.
+
+**10c. Frontend family — `frontend:component`:**
+
+1. Create a throwaway feature: `type: "frontend:component"`, `state: "D0"`, `name: "dry-run-comp"`.
+2. Invoke `/colloquium:sdlc`. Verify: routes to `feature-spec`, recognizes `frontend:component`.
+3. Manually set state to `"D2"`. Invoke `/colloquium:sdlc`. Verify: routes to
+   `feature-implement`, dispatcher routes to `feature-implement-component`.
+4. Manually set state to `"D4"`. Invoke `/colloquium:sdlc`. Verify: routes to `feature-integrate`.
+
+**10d. Legacy type handling:**
+
+1. Create a throwaway feature: `type: "contract"`, `state: "C2"`, `name: "dry-run-legacy"`.
+2. Invoke `/colloquium:sdlc`. Verify: asks user to reclassify before routing.
+
+**10e. Crash recovery:**
+
+1. Create a throwaway feature: `type: "core:value-object"`, `state: "done"`, `name: "dry-run-done"`.
+   Set `activeFeature` to point at it.
+2. Invoke `/colloquium:sdlc`. Verify: routes to `feature-integrate`, which recognizes `done`
+   as a no-op pass-through and proceeds to queue advance.
+
+**10f. Clean up.** Remove all throwaway features from state.json. Restore `activeFeature`.
+
+If any dry-run fails, the dispatcher or sub-skill has a bug. Fix before declaring v3 complete.
 
 **Step 11:** Invoke `superpowers:verification-before-completion` before declaring done.
 
@@ -2417,20 +2504,25 @@ git commit -m "feat(sdlc): complete v3 taxonomy — dispatcher + 12 loops + type
 ## Success Checklist
 
 - [ ] `colloquium:project.md` deleted
-- [ ] CLAUDE.md ≤ 200 lines, contains taxonomy (12 types), testing strategy, quality gate, file locations, conventions; app names match actual (`colloquium-api`, `colloquium-web`)
+- [ ] CLAUDE.md ≤ 250 lines, contains taxonomy (12 types), testing strategy, quality gate, file locations, conventions; app names match actual (`colloquium-api`, `colloquium-web`)
 - [ ] state.json at `schemaVersion: 3`, all completedFeatures in scoped format (idempotent append)
 - [ ] `feature-implement.md` is the dispatcher (no loop logic), routes 12 types; blocks any feature already at a loop-complete state (routes to `feature-integrate` instead)
 - [ ] 12 sub-skill files exist: aggregate, value-object, domain-service, migration, api, event-handler, repository, projection, hook, api-client, component, page
 - [ ] Each sub-skill writes a **loop-complete** state (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) — **never** writes "done"
-- [ ] Each sub-skill includes stuck escape hatch (`stuck: <reason>`) with rollback/remove/reclassify/pause options
+- [ ] Each sub-skill includes stuck escape hatch (`stuck: <reason>`) with rollback/remove/reclassify/pause options; reclassify resets to new loop's initial state (not legacy C-state mapping)
 - [ ] `feature-spec.md` routes by type (12 branches including D0→D1 via ui-design-expert, P0→P1, F0→F1)
 - [ ] `feature-verify.md` enforces C7 / core:aggregate only (UAT hard gate for the C-loop)
-- [ ] `slice-deliver.md` decomposes all 12 types (core, backend, frontend); uses compound types + sequential ordering rule (no start-gate); queue scanner uses type-appropriate initial states
-- [ ] `feature-integrate.md` accepts **loop-complete states** (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) and UV (aggregate UAT); is the **sole owner** of the `done` transition; queue scanner checks type-appropriate initial states; completedFeatures written in scoped format with duplicate guard
-- [ ] `feature-implement-component.md` enforces entry at D1, blocks D0; code review at D3 before D4; D4 uses Playwright MCP screenshots (no Storybook branch); D4 is loop-complete
+- [ ] `slice-deliver.md` decomposes all 12 types (core, backend, frontend); uses compound types + sequential ordering rule (no start-gate); queue scanner uses type-appropriate initial states + dependency check
+- [ ] `feature-integrate.md` accepts **loop-complete states** (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3), UV (aggregate UAT), AND **`done` (crash recovery no-op pass-through)**; is the **sole owner** of the `done` transition; queue scanner checks type-appropriate initial states + dependency check; completedFeatures written in scoped format with duplicate guard
+- [ ] `feature-implement-component.md` enforces entry at D1, blocks D0; generates visual harness at D3; code review at D3 before D4; D4 uses Playwright MCP screenshots via harness; D4 is loop-complete
 - [ ] `feature-implement-page.md` enforces entry at P1, blocks P0; P3 is loop-complete (assembly-first, not TDD)
-- [ ] `feature-implement-hook.md` is React-hooks-only; H2 always asserts something real (no expect(true).toBe(true)); H4 is loop-complete
-- [ ] `feature-implement-api-client.md` exists; uses vi.spyOn(globalThis, 'fetch'); no RTL; F4 is loop-complete
+- [ ] `feature-implement-hook.md` is React-hooks-only; H2 always asserts something real (no expect(true).toBe(true)); H3→H4 convention check explicitly defined; H4 is loop-complete; hook location determined by api-client dependency
+- [ ] `feature-implement-api-client.md` exists; blocks F0 with message directing to feature-spec; uses vi.spyOn(globalThis, 'fetch'); no RTL; F4 is loop-complete
 - [ ] If `simulate.md` exists, its routing tables match feature-implement.md dispatcher exactly (12 types)
-- [ ] `sdlc.md` routing table handles all v3 state codes including loop-complete states (V0–V4, S0–S5, M0–M4, A0–A4, E0–E4, R0–R5, Q0–Q5, H0–H4, F0–F4, D0–D4, P0–P3 + legacy C0–C7 + UV); loop-complete states route to `feature-integrate`
+- [ ] `sdlc.md` routing table handles all v3 state codes including loop-complete states (V0–V4, S0–S5, M0–M4, A0–A4, E0–E4, R0–R5, Q0–Q5, H0–H4, F0–F4, D0–D4, P0–P3 + legacy C0–C7 + UV + `done`); loop-complete states route to `feature-integrate`
 - [ ] `status.md` state description table covers all new state codes including loop-complete states (V4, S5, M4, R5, Q5, F4, UV)
+- [ ] Hook location rule documented: pure UI hooks in `packages/ui/src/hooks/`, API-wrapping hooks in `apps/*/src/hooks/`
+- [ ] C6 redefined for v3: aggregate-internal wiring only (event types, command handler ports) — NOT repository/HTTP handler/projection (those are separate loops)
+- [ ] V-loop and S-loop sub-skills include package scaffold check at V1→V2 / S1→S2
+- [ ] `--migrate-v3` state mapping table includes `frontend:api-client` column
+- [ ] Dry-run validation covers 3 loop families (core/backend/frontend) + legacy type handling + crash recovery (`done` state)
