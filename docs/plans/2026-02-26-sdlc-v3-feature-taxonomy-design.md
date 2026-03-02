@@ -1,22 +1,6 @@
 # SDLC v3 — Feature Taxonomy and Specialized Loops
 
-**Status:** Revised design, 2026-03-03 v8 (v1–v6: see git history; v7: adversarial review
-consolidation — 12 types collapsed to 7 types with variant fields addressing FATAL-1/2/3;
-batching for core:primitive bundles addressing FATAL-2; trivial types skip feature-integrate
-addressing SERIOUS-2; per-C-state migration mapping fixing SERIOUS-1; P-loop/D-loop gap
-fixes addressing SERIOUS-4/5; cross-slice dependency mechanism addressing SERIOUS-6;
-simplified client location rule addressing DESIGN SMELL-1; light gate skip for pure types
-addressing DESIGN SMELL-2; success criteria #7 fixed to 250 addressing DESIGN SMELL-3;
-M-loop deadlock escape addressing NIT-3.
-v8: second adversarial review — pause resume mechanism for stuck features (CRIT-1);
-batched items status field for crash recovery (CRIT-2); impl plan task reordering to prevent
-half-migrated state (CRIT-3); M-loop test-fix auto-feature for completed-feature breakage
-(SER-1); dependency-first ordering with type-precedence as tiebreaker (SER-2); hook testing
-contradiction resolved (SER-3); C6 concrete deliverables with skip condition (SER-4);
-api-client direct-done extending trivial-type pattern (SER-5); out-of-scope work boundary
-documented (SER-6); quality gate wording fixed (SMELL-1); visual harness provider sync test
-(SMELL-2); C1/UV state naming explained (SMELL-3); rollback SQL in file locations (SMELL-4)).
-**Authored:** 2026-03-03, supersedes 2026-03-03 v7.
+**Status:** v9, 2026-03-03. Full revision history in git (`git log --oneline -- docs/plans/2026-02-26-sdlc-v3-feature-taxonomy-design.md`).
 **Supersedes:** Loop section of `2026-02-26-multi-track-sdlc-redesign.md`.
 
 ---
@@ -47,10 +31,21 @@ unstyled HTML because the C-loop has no design step.
 **v6 over-correction (identified by adversarial review):**
 
 v6 proposed 12 types with 12 loops. The review found that structurally identical loops (V≈S,
-A≈E, R≈Q, F≈H) doubled the feature count per slice without proportional benefit. A realistic
-slice produces ~20 features under 12 types vs. ~10-12 under 7 types. The overhead per feature
-dropped, but total overhead increased. v7 consolidates to 7 types with variant fields, preserving
-type-appropriate behavior while halving the maintenance surface.
+A≈E, R≈Q, F≈H) doubled the feature count per slice without proportional benefit. v7
+consolidates to 7 types with variant fields, preserving type-appropriate behavior while
+halving the maintenance surface.
+
+**Realistic feature count per slice:**
+
+A minimal slice (1 aggregate, 1 page): ~8 features. A typical slice (1-2 aggregates, 2-3
+endpoints, 1 page): **12-18 features**. This is higher than v2's 9 features per slice because
+v2 bundled domain + repository + handler + E2E into a single C-loop pass. v3 separates them
+into dedicated loops. The tradeoff: each feature is faster (simpler loop), but there are more
+features. Total wall-clock time should decrease because trivial features (primitives,
+api-clients) complete in minutes, not the 30+ minutes a misapplied C-loop took in v2.
+
+Under 12-type v6, the same slice would produce ~24+ features — v7's variant consolidation
+halves that back to a manageable range.
 
 ---
 
@@ -107,10 +102,11 @@ frontend:visual:channel-feed-page
 
 ### Client Location Rule
 
-All `frontend:client` features live in `apps/`:
+All `frontend:client` features live in `apps/`. The `feature.app` field (set by `slice-deliver`)
+resolves the `*` wildcard to a concrete app directory:
 
-- `api-client` variant: `apps/*/src/api/<name>.ts`
-- `hook` variant: `apps/*/src/hooks/use<Name>.ts`
+- `api-client` variant: `apps/${feature.app}/src/api/<name>.ts`
+- `hook` variant: `apps/${feature.app}/src/hooks/use<Name>.ts`
 
 **No hooks in `packages/ui/src/hooks/` during initial development.** This eliminates the
 prediction problem (will this hook need API access?) that made the v6 split rule fragile.
@@ -147,6 +143,26 @@ information.
 No concurrent feature execution at this stage. The pointer advances only when the current
 feature reaches `done` — there is no start-gate.**
 
+**Why sequential — cost tradeoff acknowledged:** A single-pointer model means independent
+features (e.g., two `frontend:visual` components with no shared dependencies) cannot execute
+in parallel even when both are eligible. This is a deliberate tradeoff:
+
+- **Pro:** Zero coordination complexity. No merge conflicts from parallel feature branches.
+  Quality gates run against a known-good codebase. State.json has exactly one cursor.
+- **Con:** Throughput ceiling. A slice with 18 features executes ~18 sessions serially.
+- **Future escape hatch:** If this becomes a bottleneck, the design can be extended to allow
+  2–3 concurrent `activeFeature` pointers for features with disjoint file sets. This is NOT
+  planned for v3 — complexity vs. benefit doesn't justify it yet.
+
+**Cycle detection (mandatory):** After computing topological order, `slice-deliver` MUST verify
+the dependency graph is acyclic. If a cycle is detected (topological sort fails to include all
+features), `slice-deliver` must:
+
+1. Report the cycle: "Dependency cycle detected: feat-X → feat-Y → feat-Z → feat-X"
+2. Ask the user which dependency edge to remove (AskUserQuestion listing the cycle edges)
+3. Re-run topological sort after the user's choice
+   Do NOT silently drop edges or guess. A cycle means the decomposition is wrong.
+
 **Queue scanner dependency check (mandatory):** The queue scanner finds the next feature as:
 the first feature (in topological-then-type-precedence order) whose state equals the
 type-appropriate initial state **AND all entries in its `dependencies` array exist in
@@ -179,6 +195,18 @@ Two tiers. Which tier runs depends on whether the state advance is mid-loop or l
 1. `pnpm turbo typecheck` — zero TypeScript errors
 2. `pnpm turbo lint` — zero new ESLint warnings in modified files
 3. All tests across all packages — `pnpm turbo test`
+4. **Regression check (if Playwright E2E tests exist):** Re-run all existing Playwright E2E
+   tests. If any fail, the current feature broke a previously verified user path. Stop and fix
+   before advancing. This ensures non-aggregate features (handlers, persistence, clients) that
+   modify backend behavior are caught immediately — not deferred to the next aggregate's
+   `feature-verify` pass.
+
+**Regression scope by type:**
+
+- `core:primitive`, `frontend:client` (api-client): Skip E2E regression (pure/typed, zero
+  user-facing impact). `pnpm turbo test` is sufficient.
+- All other types: Run E2E regression at full gate if any `*.spec.ts` Playwright files exist
+  under `apps/*/e2e/` or `apps/*/tests/`.
 
 **Exception — L-loop (core:primitive) skips mid-loop light gates.** For a 5-line branded type,
 running 45-90 seconds of CI per gate × 3 gates is disproportionate. Pure functions have zero
@@ -207,9 +235,11 @@ reply `stuck: <reason>` at any human checkpoint or quality gate failure.
 2. Ask the user via AskUserQuestion:
    - **"Rollback"** — reset the feature to its initial loop state. Delete all artifacts.
    - **"Remove"** — mark the feature as removed. Skipped by queue scanner.
-   - **"Reclassify"** — the feature's type was wrong. Mid-loop reclassification always resets
-     to the new loop's initial state. All artifacts from the old loop are deleted. The
-     `--migrate-v3` mapping tables are for legacy C-state migration only and do NOT apply here.
+   - **"Reclassify"** — the feature's type was wrong. Before executing: list all files that
+     will be deleted (loop artifacts from old type) and ask "These files will be deleted.
+     Proceed?" Mid-loop reclassification always resets to the new loop's initial state. All
+     artifacts from the old loop are deleted. The `--migrate-v3` mapping tables are for legacy
+     C-state migration only and do NOT apply here.
    - **"Pause"** — leave at current state. Add `feature.paused = true`. Advance `activeFeature`
      to next feature.
 3. Update state.json. Display: "Feature <feat-id> marked as <choice>. Run /colloquium:sdlc."
@@ -337,25 +367,38 @@ Do NOT try to fix the test inside the M-loop. Instead:
    (already at `done`).
    - **Ahead (not yet done):** The owning feature will fix the test when its loop activates.
      Advance to M4 with the history entry. No further action needed.
-   - **Behind (already done):** The owning feature's loop will never re-activate. Auto-create
-     a `core:primitive` (variant: `service`) fix feature in the current slice's feature queue:
-     ```json
-     {
-       "id": "feat-NNN",
-       "name": "fix-<broken-test-name>",
-       "type": "core:primitive",
-       "variant": "service",
-       "dependencies": ["<this-migration-feat-id>"],
-       "state": "L0",
-       "history": [{ "type": "test-fix", "source": "<migration-feat-id>", "brokenTest": "<test>" }]
-     }
-     ```
-     Insert it immediately after the current migration feature in the queue. The L-loop will
-     fix the test and verify it passes at L4's full gate.
+   - **Behind (already done):** The owning feature's loop will never re-activate. The fix is
+     a **direct commit** (see Out-of-Scope Work table): fix the broken test in-place, run the
+     full quality gate (`pnpm turbo typecheck` + `pnpm turbo lint` + `pnpm turbo test`), commit
+     with message `fix(test): update <test-name> for migration <migration-name>`. No feature
+     entry created — test-only fixes are infrastructure, not domain behavior. Record the direct
+     commit SHA in the migration feature's history:
+     `{ type: "test-fix-commit", sha: "<commit>", brokenTest: "<test>" }`.
 3. Advance the migration to M4. The M-loop's responsibility is schema correctness, not
    fixing downstream test consumers — but it MUST ensure someone is responsible.
 
 State writes: M0, M1 (feature-spec), M2, M3, M4. Five writes. `done` by feature-integrate.
+
+---
+
+### Test DB Lifecycle (M-loop prerequisite)
+
+The M-loop's M0 check (`prisma db execute --stdin <<< "SELECT 1"`) requires a running test DB.
+This section documents the expected lifecycle so the M-loop doesn't silently stall.
+
+**Start:** `docker compose up -d db` (or equivalent from project's `docker-compose.yml`).
+The M-loop does NOT start the DB — it only checks. If absent, M0 blocks with a clear message:
+"Test DB not running. Start it with `docker compose up -d db` and re-run /colloquium:sdlc."
+
+**Reset between slices:** `prisma migrate reset --force` drops and recreates. Run this between
+slices if the test DB accumulated drift from manual testing. This is optional — Prisma tracks
+migration state, so `migrate deploy` is idempotent.
+
+**Teardown:** `docker compose down` after session. Not automated — the SDLC does not manage
+Docker lifecycle. If the user forgets, subsequent M0 checks will remind them.
+
+**CI/CD note:** In CI, the test DB is ephemeral (spun up per pipeline). This lifecycle section
+applies to local development only.
 
 ---
 
@@ -372,10 +415,11 @@ REST handlers AND domain event ACL handlers.
 
 ```
 A0 → queued
-A1 → spec written (table format, max 30 lines):
+A1 → spec written (table format, max 50 lines):
      - api: endpoint path + method, Zod request/response, auth, error mapping
      - event: event name, CT-NNN reference (file MUST exist), consumed Zod schema, command produced
-     If spec exceeds 30 lines: split into two features.
+     If spec exceeds 50 lines: the endpoint is doing too much — split the ENDPOINT, not just the
+     feature. Use shared Zod type references instead of inlining schemas to compress.
 A2 → tests written:
      - api: one test per error mapping row + happy path + missing auth. app.request(). All FAIL.
      - event: schema-rejection test + happy-path test. Direct handler call. All FAIL.
@@ -552,6 +596,31 @@ State writes: D1 (feature-spec), D2, D3, D4. Four writes. `done` by feature-inte
 
 ---
 
+### Per-Loop Integration Checklist
+
+Each sub-skill declares what `feature-integrate` must check. `feature-integrate` reads
+`feature.type` and `feature.variant` to select the checklist — but the checklist content
+is defined HERE (in the design doc) and embedded in the sub-skill files, NOT hardcoded in
+`feature-integrate`. This prevents `feature-integrate` from becoming a god-skill.
+
+| Type / Variant                            | Integration checklist                                                         |
+| ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `core:aggregate`                          | Upstream wiring, downstream wiring, policy documents, feature flag lifecycle  |
+| `backend:handler` (event)                 | Upstream wiring, downstream wiring, policy documents, feature flag lifecycle  |
+| `backend:handler` (api)                   | Feature flag lifecycle, verify no N+1 escaped review                          |
+| `backend:persistence`                     | Feature flag lifecycle, verify no N+1 escaped review                          |
+| `backend:migration`                       | Rollback SQL verified at `docs/migrations/rollbacks/`, feature flag lifecycle |
+| `frontend:client` (hook)                  | Feature flag lifecycle                                                        |
+| `frontend:visual`                         | Feature flag lifecycle                                                        |
+| `core:primitive`, `frontend:client` (api) | N/A — loop writes `done` directly, skips `feature-integrate`                  |
+
+`feature-integrate` is a **dispatcher for the checklist**, not the owner of checklist content.
+Each sub-skill file embeds its own checklist as a `## Integration Checklist` section that
+`feature-integrate` can reference for context. The benefit: adding a checklist item for
+handlers doesn't require touching `feature-integrate` — only the handler sub-skill.
+
+---
+
 ## CLAUDE.md Changes
 
 **Budget:** 96 lines current. Hard ceiling: 250 lines.
@@ -641,6 +710,13 @@ etc.). Legacy values (`aggregate`, `contract`, `read-model`) preserved as-is.
 - `frontend:client`: `"api-client"` or `"hook"`
 - `frontend:visual`: `"component"` or `"page"`
   Types without variants (`core:aggregate`, `backend:migration`) omit this field.
+
+**Feature app field (new, optional):** `feature.app` — required for `frontend:client` and
+`frontend:visual` features. Specifies which app directory the feature targets (e.g.,
+`"colloquium-web"`, `"sonar"`). `slice-deliver` sets this based on the slice's bounded context.
+If a slice spans multiple apps, `slice-deliver` asks the user per feature via AskUserQuestion.
+Path resolution uses `apps/${feature.app}/src/...` instead of `apps/*/src/...`.
+Omitted for `core:*` and `backend:*` features (they target fixed locations).
 
 **Feature items array (new, optional):** For batched `core:primitive` features (value-object
 variant), `feature.items` is an array of
@@ -864,6 +940,12 @@ If you discover mid-loop that a feature has the wrong type:
 3. Run `/colloquium:sdlc` — dispatcher reads corrected type and routes correctly
 4. Accept that some work may need to be re-done under the new loop's quality gate
 
+**Cost acknowledgment:** Reclassification destroys all loop artifacts (tests, specs, source
+files) from the old type. This is intentional — loops produce type-specific artifacts that
+cannot carry over. Before confirming reclassification, the stuck handler lists which files
+will be deleted and asks: "These files will be deleted. Proceed?" This prevents accidental
+data loss when the user meant to use a different stuck option (rollback, pause).
+
 ---
 
 ## Idempotent completedFeatures Append
@@ -887,7 +969,7 @@ Guards against crash-recovery duplicates.
 | `core:aggregate`      | spec.md (full)          | spec.md (full, unchanged)                    |
 | `core:primitive`      | spec.md (100–200 lines) | JSDoc in source (both variants)              |
 | `backend:migration`   | ad hoc notes            | rollback SQL in docs/migrations/rollbacks/   |
-| `backend:handler`     | spec.md (narrative)     | spec.md (table, 30 lines max, both variants) |
+| `backend:handler`     | spec.md (narrative)     | spec.md (table, 50 lines max, both variants) |
 | `backend:persistence` | spec.md                 | TypeScript interface (no spec.md)            |
 | `frontend:client`     | spec.md or nothing      | JSDoc in source (both variants)              |
 | `frontend:visual`     | nothing / spec.md       | design.md (component) / JSDoc (page)         |
@@ -911,5 +993,5 @@ SL-002 had 9 spec.md files. Under new taxonomy: ~4. >50% reduction.
 11. `feature-integrate` owns `done` for all types except `core:primitive` (L-loop) and `frontend:client` api-client variant (F-loop), which write done directly
 12. `slice-deliver` decomposes all 7 types with variants from model.md
 13. `completedFeatures` never contains duplicates (idempotent append)
-14. A realistic slice produces ~10-12 features (not ~20 as under 12-type v6)
+14. A realistic slice produces 12-18 features (not ~24+ as under 12-type v6)
 15. `core:primitive` value-object bundles process multiple items in one feature cycle

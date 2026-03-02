@@ -2,14 +2,7 @@
 
 > **For Claude:** Use `superpowers:executing-plans` to implement this plan task-by-task.
 
-**Revised:** 2026-03-03 — v8 second adversarial review applied on top of v7 (v7: 12 types → 7
-types with variants; L-loop batching + direct-done; per-C-state migration mapping; apps-only
-client location; visual harness providers; cross-slice deps; light gate skip; M-loop deadlock
-escape; P-loop gap fix; 7 sub-skills. v8: pause resume mechanism; batched items status field;
-task reordering — migration moved to Task 9.8; M-loop test-fix auto-feature; dependency-first
-ordering; hook testing contradiction fixed; C6 concrete deliverables with skip; api-client
-direct-done; out-of-scope boundary; quality gate wording; provider sync test; C1/UV naming;
-rollback SQL in file locations).
+**Revised:** v9, 2026-03-03. Full revision history in git (`git log --oneline -- docs/plans/2026-02-26-sdlc-v3-feature-taxonomy-impl.md`).
 
 **Goal:** Replace the 3-type flat feature model with a 7-type `{domain}:{type}:{name}` taxonomy
 with variant fields, each with an invariant loop (per variant), eliminating the "DDD loop applied
@@ -173,7 +166,7 @@ Typed API clients        → apps/*/src/api/<name>.ts
 React hooks              → apps/*/src/hooks/use<Name>.ts
 Contract docs            → docs/contracts/CT-NNN-<kebab-name>.md
 Aggregate specs          → docs/features/<BC>/<AggregateName>/spec.md
-Handler specs            → docs/features/<BC>/<EndpointOrEventName>/spec.md (table, max 30 lines)
+Handler specs            → docs/features/<BC>/<EndpointOrEventName>/spec.md (table, max 50 lines)
 Component designs        → docs/features/<BC>/<ComponentName>/design.md
 Migration rollback SQL   → docs/migrations/rollbacks/<name>-rollback.sql
 ```
@@ -415,6 +408,14 @@ Assign feature order using **dependency-first, type-precedence as tiebreaker**:
    `core:primitive → core:aggregate → backend:migration → backend:persistence → backend:handler → frontend:client → frontend:visual`
 3. **Secondary tiebreaker:** alphabetical by BC name.
 
+**Cycle detection (mandatory):** After computing topological order, verify the graph is acyclic.
+If a cycle is detected (topological sort fails to include all features):
+
+1. Report the cycle path to the user.
+2. Ask user which dependency edge to remove (AskUserQuestion listing cycle edges).
+3. Re-run topological sort after user's choice.
+   Do NOT silently drop edges or guess.
+
 `activeFeature` is a single pointer. One feature executes at a time. The pointer advances
 only when the current feature reaches `done` — there is no start-gate.
 
@@ -470,6 +471,22 @@ For non-batched features (no items array):
   "variant": "api",
   "dependencies": ["feat-002"],
   "state": "A0",
+  "history": []
+}
+```
+
+For frontend features (includes `app` field targeting a specific app directory):
+
+```json
+{
+  "id": "feat-005",
+  "name": "channel-messages-client",
+  "bc": "Messaging",
+  "type": "frontend:client",
+  "variant": "api-client",
+  "app": "colloquium-web",
+  "dependencies": ["feat-003"],
+  "state": "F0",
   "history": []
 }
 ```
@@ -548,7 +565,7 @@ Display: "No spec.md for migrations. Write schema changes at M1."
 State advance: M0 → M1.
 
 **`backend:handler`:**
-Generate table-format spec.md (max 30 lines) based on variant:
+Generate table-format spec.md (max 50 lines) based on variant:
 
 _api variant:_ endpoint path + method, Zod request/response, auth, error mapping table.
 _event variant:_ event name, CT-NNN reference (file MUST exist), consumed Zod schema, command
@@ -920,9 +937,10 @@ a repository integration test), do NOT fix it here.
 1. Record history: `{ type: "test-breakage", details: "<which test, which package>" }`.
 2. Check if the owning feature is **ahead** (not yet done) or **behind** (already at `done`):
    - **Ahead:** The owning feature will fix it when its loop activates. No further action.
-   - **Behind (already done):** Auto-create a `core:primitive` (variant: `service`) fix feature
-     in the current slice queue, with dependency on this migration, placed immediately after it.
-     The L-loop will fix the test and verify at L4's full gate.
+   - **Behind (already done):** Fix the broken test as a **direct commit**: fix test in-place,
+     run full quality gate, commit with `fix(test): update <test-name> for migration <name>`.
+     No feature entry created. Record commit SHA in history:
+     `{ type: "test-fix-commit", sha: "<commit>", brokenTest: "<test>" }`.
 3. Advance to M4.
 
 Advance to `"M4"` (loop-complete). **Do NOT write `"done"` — feature-integrate owns that.**
@@ -1394,16 +1412,21 @@ Quality gate. State write: `"D2"`.
 
 ### component variant:
 
-1. Implement per design.md: Tailwind, shadcn/ui, zero inline styles.
-2. Generate visual harness: `packages/ui/src/<ComponentName>/__visual__/<ComponentName>.visual.tsx`
-   Harness MUST wrap components in same providers as production app:
-   - Theme provider / design tokens
-   - CSS reset / global styles
-   - Test QueryClient (for mocked hooks)
-     Import providers from `packages/ui/src/__visual__/providers.tsx` (shared across all harnesses).
-3. Export from `packages/ui/src/index.ts`.
-4. Run RTL tests — all pass.
-5. Code review: matches design.md? zero inline styles? tests passing? exported? harness renders
+1. **Provider scaffold check (first D-loop component only):** If `packages/ui/src/__visual__/providers.tsx`
+   does NOT exist, create it now:
+   - Export a `VisualTestProviders` wrapper component that includes: theme provider, CSS
+     reset/global styles, test QueryClient.
+   - Create `packages/ui/src/__visual__/providers.test.ts`: import `VisualTestProviders` and
+     the app's root layout providers, assert they export the same set of provider component
+     names. If circular dependency prevents import, document the canonical provider list as a
+     const array in `providers.tsx` and assert against that.
+2. Implement per design.md: Tailwind, shadcn/ui, zero inline styles.
+3. Generate visual harness: `packages/ui/src/<ComponentName>/__visual__/<ComponentName>.visual.tsx`
+   Harness MUST wrap components using `VisualTestProviders` from
+   `packages/ui/src/__visual__/providers.tsx` (shared across all harnesses).
+4. Export from `packages/ui/src/index.ts`.
+5. Run RTL tests — all pass.
+6. Code review: matches design.md? zero inline styles? tests passing? exported? harness renders
    all states?
 
 ### page variant:
@@ -1668,31 +1691,28 @@ Else:
 Skip uat.md read.
 ```
 
-**Step 6:** Make the integration checklist type-aware:
+**Step 6:** Make the integration checklist type-aware. Replace the single hardcoded checklist
+with a dispatch model:
 
 ```markdown
-**Integration checklist by type:**
+**Integration checklist — dispatched by type:**
 
-`core:aggregate`, `backend:handler` (event variant):
+Read `currentFeature.type` and `currentFeature.variant`. Apply the matching checklist from
+the Per-Loop Integration Checklist table (see design doc § Per-Loop Integration Checklist).
 
-1. Upstream wiring (event connections)
-2. Downstream wiring (event connections)
-3. Policy documents for new cross-cutting interactions
-4. Feature flag lifecycle
+Each sub-skill file embeds its own `## Integration Checklist` section as a reference.
+`feature-integrate` reads the feature type, selects the matching checklist, and executes it.
 
-`backend:handler` (api variant), `backend:persistence`:
+| Type / Variant                             | Checklist                                                                     |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| `core:aggregate`, `backend:handler` (evt)  | Upstream wiring, downstream wiring, policy documents, feature flag lifecycle  |
+| `backend:handler` (api), `backend:persist` | Feature flag lifecycle, verify no N+1 escaped review                          |
+| `backend:migration`                        | Rollback SQL verified at `docs/migrations/rollbacks/`, feature flag lifecycle |
+| `frontend:client` (hook), `frontend:vis`   | Feature flag lifecycle                                                        |
+| `core:primitive`, `frontend:client` (api)  | N/A — loop writes done directly, never reaches feature-integrate              |
 
-1. Feature flag lifecycle
-2. Verify no N+1 queries escaped code review
-
-`backend:migration`:
-
-1. Rollback SQL verified at `docs/migrations/rollbacks/`
-2. Feature flag lifecycle (if behind a flag)
-
-`frontend:client`, `frontend:visual`:
-
-1. Feature flag lifecycle
+All four checklist items (or applicable subset) must be explicitly addressed — even if the
+answer is "N/A." Skipping without documenting is not allowed.
 ```
 
 Commit:
@@ -1901,7 +1921,7 @@ ls .claude/commands/colloquium/project.md 2>&1
 **Step 6:** Verify D-loop entry enforcement:
 Read `feature-implement-visual.md` — confirm it blocks at D0 with message to run feature-spec.
 
-**Step 7:** If `simulate.md` exists, update routing tables for 7 types. If absent, skip.
+**Step 7:** ~~removed — `simulate.md` does not exist in this project.~~
 
 **Step 8:** Verify `sdlc.md` routing covers all new states including loop-complete:
 L0–L4, M0–M4, A0–A4, R0–R5, F0–F4, D0–D4 in addition to existing C0–C7.
