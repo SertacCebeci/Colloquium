@@ -2,11 +2,14 @@
 
 > **For Claude:** Use `superpowers:executing-plans` to implement this plan task-by-task.
 
-**Revised:** 2026-02-28 — review findings applied (sdlc.md routing task added as Task 9.6, status.md
-update task added as Task 9.7, Task 3 state mapping for legacy in-progress features, Task 7k P-loop
-content written from scratch replacing erroneous Task 7f reference, Task 6 feature-spec enforcement
-check made explicit, vi.spyOn(fetch) → vi.spyOn(globalThis, 'fetch') globally, Task 4 rollback note
-added, Task 10 validation steps updated to verify new tasks).
+**Revised:** 2026-03-02 — v5 review findings applied (all previous revisions preserved; v5: "done"
+state overloading fixed — sub-skills end at loop-complete states, feature-integrate is sole owner
+of "done" transition; C-loop state write count corrected; H-loop write count aligned; P-loop TDD
+language fixed; slice-deliver extended to decompose all 12 types; api-client added to read-model
+reclassification options; completedFeatures idempotent append; Storybook prerequisite for D4;
+page UAT consideration; loop-complete state guard in dispatcher; CLAUDE.md app names fixed;
+cn helper context preserved; Task 7a title corrected; new states V4/S5/M4/R5/Q5/F4 added to
+status.md).
 
 **Goal:** Replace the 3-type flat feature model with a 12-type `{domain}:{type}:{name}` taxonomy,
 each with an invariant loop, eliminating the "DDD loop applied to React hooks" problem from SL-002.
@@ -68,6 +71,15 @@ git commit -m "chore(sdlc): remove deprecated colloquium:project skill"
 **File:** `CLAUDE.md`
 
 Read CLAUDE.md first.
+
+**Step 0: Fix stale app names in Monorepo Package Boundaries table**
+
+Replace:
+
+- `apps/colloquium-blog-api` → `apps/colloquium-api`
+- `apps/colloquium-blog` → `apps/colloquium-web`
+
+These are the actual directory names. The old names are stale references.
 
 **Step 1: Remove three sections**
 
@@ -182,7 +194,7 @@ Component designs        → docs/features/<BC>/<ComponentName>/design.md
 ## Frontend Conventions (Hard Rules)
 
 - Server state: TanStack Query only — never raw `fetch()` inside a React component
-- Class merging: `cn` always from `@colloquium/ui` — not `clsx` or `tailwind-merge` directly
+- Class merging: `cn` always from `@colloquium/ui` (clsx + tailwind-merge — handles class conflicts). `@colloquium/utils` has a DIFFERENT `cn` (simple string join — NOT Tailwind-aware). Never use the utils version in components.
 - Shadcn check: verify `packages/ui/src/components/ui/` before building any custom primitive
 - Hook returns: named state values (`state: "Idle" | "Loading" | ...`), not boolean flags
 ```
@@ -325,12 +337,63 @@ Read the file first. Make these targeted changes:
 **Step 1:** Change all `schemaVersion = 2` checks to `schemaVersion = 3`.
 Update error message: reference `--migrate-v3` instead of `--migrate`.
 
-**Step 2:** Update feature decomposition to use 12-type compound naming:
+**Step 2:** Rewrite the feature decomposition section to produce all 12 types.
+
+Replace the current three-category decomposition (Steps 3–5: aggregates, contracts, read-models)
+with full 12-type decomposition logic:
+
+```markdown
+### Decomposition — Core Types (from model.md aggregates)
+
+For each aggregate in model.md:
+
+- Create one `core:aggregate` feature per aggregate
+- For each value object referenced by the aggregate (e.g., `ChannelId`, `MessageContent`):
+  create one `core:value-object` feature. Dependency: none (value objects are foundation).
+- For each domain service referenced in cross-aggregate coordination or complex business rules:
+  create one `core:domain-service` feature. Dependency: the value objects it uses.
+
+### Decomposition — Backend Types
+
+For each aggregate that requires persistence:
+
+- Create one `backend:migration` feature if new tables are needed. Dependency: none.
+- Create one `backend:repository` feature. Dependency: the migration that creates its table.
+- If the aggregate has a read-side view: create one `backend:projection` feature.
+  Dependency: the migration that creates its read-side table.
+
+For each contract in `currentSlice.contracts`:
+
+- Read the CT-NNN file. If it describes an HTTP endpoint: create `backend:api`.
+  If it describes a domain event: create `backend:event-handler`. Do not guess — read the file.
+  Dependency: the aggregate(s) on both sides.
+
+### Decomposition — Frontend Types
+
+For each API endpoint exposed by a `backend:api` feature:
+
+- Create one `frontend:api-client` feature. Dependency: the `backend:api` feature.
+
+For each React hook needed to wire API data to UI:
+
+- Create one `frontend:hook` feature. Dependency: the `frontend:api-client` it wraps (if any).
+
+For each reusable UI component identified in the event storm or model read models:
+
+- Create one `frontend:component` feature. Dependency: none (components are standalone).
+
+For each page that assembles hooks + components into a routed view:
+
+- Create one `frontend:page` feature. Dependency: the hooks and components it uses.
+
+### Legacy type conversion (for partially migrated slices)
 
 - `type: "aggregate"` → `type: "core:aggregate"`
-- `type: "contract"` → `type: "backend:api"` for HTTP endpoints; `type: "backend:event-handler"` for domain event handlers (determine by reading the CT-NNN file — HTTP path = api, event name = event-handler)
-- `type: "read-model"` → ask the user: "Is this a hook, component, or page?"
-  Route to `frontend:hook`, `frontend:component`, or `frontend:page` accordingly.
+- `type: "contract"` → read the CT-NNN file. HTTP path = `"backend:api"`,
+  event name = `"backend:event-handler"`. If ambiguous, ask the user.
+- `type: "read-model"` → ask the user: "Is this a hook, component, page, or api-client?"
+  Route to `frontend:hook`, `frontend:component`, `frontend:page`, or `frontend:api-client`.
+```
 
 **Step 3:** Replace the dependency ordering section with the sequential ordering rule:
 
@@ -341,7 +404,7 @@ Assign feature order using this precedence chain:
 `core:value-object → core:domain-service → core:aggregate → backend:migration → backend:repository → backend:projection → backend:api → backend:event-handler → frontend:api-client → frontend:hook → frontend:component → frontend:page`
 
 `activeFeature` is a single pointer. One feature executes at a time. The pointer advances
-only when the current feature reaches `done` — there is no start-gate.
+only when the current feature reaches `done` (set by feature-integrate) — there is no start-gate.
 
 Set `activeFeature` to the first feature in the precedence-ordered queue.
 ```
@@ -601,7 +664,7 @@ cp .claude/commands/colloquium/feature-implement.md \
 
 Changes to make:
 
-1. Title: `# colloquium:feature-implement-aggregate — DDD Aggregate Loop (C2 → done)`
+1. Title: `# colloquium:feature-implement-aggregate — DDD Aggregate Loop (C2 → C7)`
 2. Purpose line: "Full TDD + DDD loop for `core:aggregate` features only. Invoked by the
    `colloquium:feature-implement` dispatcher."
 3. Schema check: accept `schemaVersion = 3` (also accept `2` for legacy features)
@@ -632,7 +695,7 @@ git commit -m "feat(sdlc): add feature-implement-aggregate (DDD loop extracted)"
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-value-object — Value Object Loop (V1 → done)
+# colloquium:feature-implement-value-object — Value Object Loop (V1 → V4)
 
 **Purpose:** Implement `core:value-object` features — value objects, policies, specifications.
 Pure: no injected dependencies, no mocks. Invoked by dispatcher.
@@ -714,20 +777,20 @@ Quality gate on test file. State write: `"V3"`.
 
 ---
 
-## V3 → done: Implement + Export
+## V3 → V4: Implement + Export
 
 1. Write implementation satisfying the type/signature.
 2. Run tests — all must pass.
 3. Export from package index (`packages/<bc>/src/index.ts` or `packages/utils/src/index.ts`).
 4. Quality gate: `pnpm turbo typecheck` + `pnpm turbo lint` + `pnpm --filter <package> test`.
 
-Advance to `"done"`. Write state.json.
+Advance to `"V4"` (loop-complete). Write state.json. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 Display:
 
 ```
 ════════════════════════════════════════════════════════════════
-✅ Value object done — <feat-id>: <name>
+✅ Value object loop complete — <feat-id>: <name>
 Next: /colloquium:feature-integrate
 ════════════════════════════════════════════════════════════════
 ```
@@ -750,7 +813,7 @@ git commit -m "feat(sdlc): add feature-implement-value-object (V-loop, pure test
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-domain-service — Domain Service Loop (S1 → done)
+# colloquium:feature-implement-domain-service — Domain Service Loop (S1 → S5)
 
 **Purpose:** Implement `core:domain-service` features — stateless services with injected
 typed interfaces as dependencies. Invoked by dispatcher.
@@ -761,7 +824,7 @@ typed interfaces as dependencies. Invoked by dispatcher.
 
 1. Read state.json. Resolve context (v3 cursor).
    Require `feature.type = "core:domain-service"`.
-   Require `feature.state` ∈ {S1, S2, S3, S4}.
+   Require `feature.state` ∈ {S1, S2, S3, S4, S5}.
 
 ---
 
@@ -818,7 +881,7 @@ Quality gate on test file. State write: `"S3"`.
 
 ---
 
-## S4 → done: Code Review
+## S4 → S5: Code Review
 
 Check:
 
@@ -827,7 +890,7 @@ Check:
 - No hidden I/O outside injected deps?
 
 Invoke `superpowers:requesting-code-review` (service-focused checklist).
-Quality gate. Advance to `"done"`. Write state.json.
+Quality gate. Advance to `"S5"` (loop-complete). Write state.json. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 **Code review failure at S4:** Fix in-place without resetting state. Re-run quality gate.
 Re-request review. The next session resumes at S4 using source file inspection — do NOT
@@ -851,7 +914,7 @@ git commit -m "feat(sdlc): add feature-implement-domain-service (S-loop, vi.fn()
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-migration — Migration Loop (M1 → done)
+# colloquium:feature-implement-migration — Migration Loop (M1 → M4)
 
 **Purpose:** Implement `backend:migration` features — Prisma schema changes with deployment
 risk, rollback documentation, and test DB verification. No automated unit tests.
@@ -863,7 +926,7 @@ Invoked by dispatcher.
 
 1. Read state.json. Resolve context (v3 cursor).
    Require `feature.type = "backend:migration"`.
-   Require `feature.state` ∈ {M1, M2, M3}.
+   Require `feature.state` ∈ {M1, M2, M3, M4}.
 2. Test DB must be running. If absent: display "Test DB is not running." Stop.
 
 ---
@@ -913,7 +976,7 @@ State write: `"M3"`.
 
 ---
 
-## M3 → done: Deploy to Test DB + Rollback Verification
+## M3 → M4: Deploy to Test DB + Rollback Verification
 
 ```bash
 cd apps/colloquium-api
@@ -931,13 +994,13 @@ Write rollback SQL to a stable path outside the Prisma-managed directory:
 (This path survives `prisma migrate reset` and is not parsed by Prisma tooling.)
 
 Quality gate (typecheck + lint after client regeneration).
-Advance to `"done"`. Write state.json.
+Advance to `"M4"` (loop-complete). Write state.json. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 Display:
 
 ```
 ════════════════════════════════════════════════════════════════
-✅ Migration done — <feat-id>: <name>
+✅ Migration loop complete — <feat-id>: <name>
 Rollback SQL: docs/migrations/rollbacks/<name>-rollback.sql
 Next: /colloquium:feature-integrate
 ════════════════════════════════════════════════════════════════
@@ -961,7 +1024,7 @@ git commit -m "feat(sdlc): add feature-implement-migration (M-loop, test DB veri
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-api — API Loop (A1 → done)
+# colloquium:feature-implement-api — API Loop (A1 → A4)
 
 **Purpose:** Implement `backend:api` features (REST handlers only).
 Tests via Hono `app.request()` only. Playwright is never used.
@@ -1038,13 +1101,13 @@ State write: `"A4"`.
 
 ## Completion
 
-Advance `currentFeature.state` to `"done"`. Write state.json.
+A4 is loop-complete. Write state.json with `"A4"`. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 Display:
 ```
 
 ════════════════════════════════════════════════════════════════
-✅ API feature done — <feat-id>: <name>
+✅ API loop complete — <feat-id>: <name>
 Next: /colloquium:feature-integrate
 ════════════════════════════════════════════════════════════════
 
@@ -1068,7 +1131,7 @@ git commit -m "feat(sdlc): add feature-implement-api (A-loop, app.request() only
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-event-handler — Event Handler Loop (E1 → done)
+# colloquium:feature-implement-event-handler — Event Handler Loop (E1 → E4)
 
 **Purpose:** Implement `backend:event-handler` features — domain event ACL handlers that
 validate a cross-BC event against a CT-NNN schema and issue a command in the consumer domain.
@@ -1146,13 +1209,13 @@ State write: `"E4"`.
 
 ## Completion
 
-Advance to `"done"`. Write state.json.
+E4 is loop-complete. Write state.json with `"E4"`. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 Display:
 ```
 
 ════════════════════════════════════════════════════════════════
-✅ Event handler done — <feat-id>: <name>
+✅ Event handler loop complete — <feat-id>: <name>
 Next: /colloquium:feature-integrate
 ════════════════════════════════════════════════════════════════
 
@@ -1176,7 +1239,7 @@ git commit -m "feat(sdlc): add feature-implement-event-handler (E-loop, direct c
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-repository — Repository Loop (R1 → done)
+# colloquium:feature-implement-repository — Repository Loop (R1 → R5)
 
 **Purpose:** Implement `backend:repository` features — command-side Prisma repository.
 TypeScript interface IS the spec. Integration tests use real Prisma client against test DB.
@@ -1188,7 +1251,7 @@ dependency — do not perform migrations inside this loop. Invoked by dispatcher
 ## Enforcement
 
 1. Resolve context (v3). Require `feature.type = "backend:repository"`.
-   Require `feature.state` ∈ {R1, R2, R3, R4}.
+   Require `feature.state` ∈ {R1, R2, R3, R4, R5}.
 2. Test DB must be running. If absent: display "Test DB is not running." Stop.
 
 ---
@@ -1248,7 +1311,7 @@ State write: `"R4"`.
 
 ---
 
-## R4 → done: Code Review
+## R4 → R5: Code Review
 
 Invoke `superpowers:requesting-code-review` + `superpowers:receiving-code-review`.
 
@@ -1258,7 +1321,7 @@ Checklist:
 - Missing indexes identified?
 - Connection released correctly in all paths?
 
-Quality gate. Advance to `"done"`. Write state.json.
+Quality gate. Advance to `"R5"` (loop-complete). Write state.json. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 ````
 
@@ -1278,7 +1341,7 @@ git commit -m "feat(sdlc): add feature-implement-repository (R-loop, no migratio
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-projection — Projection Loop (Q1 → done)
+# colloquium:feature-implement-projection — Projection Loop (Q1 → Q5)
 
 **Purpose:** Implement `backend:projection` features — query-side projections that
 materialize read models from domain events. TypeScript interface IS the spec.
@@ -1289,7 +1352,7 @@ Integration tests use real Prisma client against test DB. Invoked by dispatcher.
 ## Enforcement
 
 1. Resolve context (v3). Require `feature.type = "backend:projection"`.
-   Require `feature.state` ∈ {Q1, Q2, Q3, Q4}.
+   Require `feature.state` ∈ {Q1, Q2, Q3, Q4, Q5}.
 2. Test DB must be running. If absent: display "Test DB is not running." Stop.
 
 ---
@@ -1354,7 +1417,7 @@ State write: `"Q4"`.
 
 ---
 
-## Q4 → done: Code Review
+## Q4 → Q5: Code Review
 
 Invoke `superpowers:requesting-code-review` + `superpowers:receiving-code-review`.
 
@@ -1364,7 +1427,7 @@ Checklist:
 - Missing indexes on read-side table for common query patterns?
 - Connection released in all paths?
 
-Quality gate. Advance to `"done"`. Write state.json.
+Quality gate. Advance to `"Q5"` (loop-complete). Write state.json. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 ````
 
@@ -1403,7 +1466,19 @@ Write from scratch. Key constraints for this version:
     F-loop tests a typed fetch wrapper directly. H3 tests that a hook correctly USES the network.
 
 The loop header and session start display follow the pattern of other sub-skills.
-State writes: H0 activation, done. Two writes.
+
+H4 is loop-complete. Write state.json with `"H4"`. **Do NOT write `"done"` — feature-integrate owns that transition.**
+
+Display:
+
+```
+════════════════════════════════════════════════════════════════
+✅ Hook loop complete — <feat-id>: <name>
+Next: /colloquium:feature-integrate
+════════════════════════════════════════════════════════════════
+```
+
+State writes: H1 (by feature-spec), H2 (state machine tests written), H3 (RTL integration tests written), H4 (convention check passed). Four writes within the H-loop sub-skill. H0 written by slice-deliver (activation). `done` written by feature-integrate only.
 
 Commit:
 
@@ -1429,7 +1504,7 @@ Write from scratch. Key changes from original plan:
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-component — Component Loop (D1 → done)
+# colloquium:feature-implement-component — Component Loop (D1 → D4)
 
 **Purpose:** Implement `frontend:component` features — reusable React components with visual
 design gate. D0 → D1 is owned by `feature-spec`. This loop starts at D1.
@@ -1514,13 +1589,13 @@ State write: `"D4"` — written only after user confirms visual check passes.
 
 ## Completion
 
-Advance to `"done"`. Write state.json.
+D4 is loop-complete. Write state.json with `"D4"`. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 Display:
 ```
 
 ════════════════════════════════════════════════════════════════
-✅ Component done — <feat-id>: <name>
+✅ Component loop complete — <feat-id>: <name>
 Next: /colloquium:feature-integrate
 ════════════════════════════════════════════════════════════════
 
@@ -1555,7 +1630,7 @@ State writes: P0 activation, P1 (by feature-spec), P2 (RTL tests), P3 (Playwrigh
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-page — Page Loop (P1 → done)
+# colloquium:feature-implement-page — Page Loop (P1 → P3)
 
 **Purpose:** Implement `frontend:page` features — assembled pages wiring hooks + components
 into a routed view. P0 → P1 is owned by `feature-spec`. This loop starts at P1.
@@ -1604,8 +1679,8 @@ Jump to sub-step matching current state.
    - Loading state renders loading indicator
    - Error state renders error message
    - Populated state renders correct components with correct props
-5. Run tests — all must FAIL before page implementation is complete (if page was already
-   assembled in step 2, the tests should pass; if not, iterate).
+5. Run tests — all must PASS (page was assembled in step 2, RTL tests verify wiring correctness).
+   NOTE: P-loop is assembly-first, not TDD. Tests verify an already-assembled page.
 6. Quality gate on test files.
 State write: `"P2"`.
 
@@ -1624,20 +1699,23 @@ State write: `"P2"`.
    - All critical paths from JSDoc covered?
    - No flaky selectors (prefer data-testid or role selectors)?
    - Test teardown correct (no leaked state between tests)?
+   - **Page UAT consideration:** If this is a critical user-facing path, include a manual
+     walkthrough of the user journey during code review. Document the result in a comment
+     within the E2E test file.
 5. Quality gate.
-State write: `"P3"`.
+State write: `"P3"` (loop-complete). **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 ---
 
 ## Completion
 
-Advance to `"done"`. Write state.json.
+P3 is loop-complete.
 
 Display:
 ```
 
 ════════════════════════════════════════════════════════════════
-✅ Page done — <feat-id>: <name>
+✅ Page loop complete — <feat-id>: <name>
 Next: /colloquium:feature-integrate
 ════════════════════════════════════════════════════════════════
 
@@ -1661,7 +1739,7 @@ git commit -m "feat(sdlc): add feature-implement-page (P-loop, starts at P1)"
 Write from scratch:
 
 ```markdown
-# colloquium:feature-implement-api-client — API Client Loop (F1 → done)
+# colloquium:feature-implement-api-client — API Client Loop (F1 → F4)
 
 **Purpose:** Implement `frontend:api-client` features — typed `fetch` wrappers coupled to
 `colloquium-api`'s Zod schemas and endpoint paths. Not React-specific. No RTL.
@@ -1673,7 +1751,7 @@ Tests use `vi.spyOn(globalThis, 'fetch')`. Invoked by dispatcher.
 
 1. Read state.json. Resolve context (v3 cursor).
    Require `feature.type = "frontend:api-client"`.
-   Require `feature.state` ∈ {F1, F2, F3}.
+   Require `feature.state` ∈ {F1, F2, F3, F4}.
 
 ---
 
@@ -1718,20 +1796,20 @@ Quality gate on test files. State write: `"F3"`.
 
 ---
 
-## F3 → done: Implement + Export
+## F3 → F4: Implement + Export
 
 1. Write implementation satisfying the interface.
 2. Run tests — all must pass.
 3. Quality gate: `pnpm turbo typecheck` + `pnpm turbo lint` +
    `pnpm --filter <app-name> test`.
 
-Advance to `"done"`. Write state.json.
+Advance to `"F4"` (loop-complete). Write state.json. **Do NOT write `"done"` — feature-integrate owns that transition.**
 
 Display:
 ```
 
 ════════════════════════════════════════════════════════════════
-✅ API client done — <feat-id>: <name>
+✅ API client loop complete — <feat-id>: <name>
 Next: /colloquium:feature-integrate
 ════════════════════════════════════════════════════════════════
 
@@ -1811,7 +1889,7 @@ Route to `feature-implement-api` or `feature-implement-event-handler` based on a
 Do NOT auto-route legacy `contract` to `backend:api` — it would silently misroute event handlers.
 
 **For legacy `read-model`:** Ask the user:
-"Is this feature a hook, component, or page? (Legacy feature — reclassify to route correctly.)"
+"Is this feature a hook, component, page, or api-client? (Legacy feature — reclassify to route correctly.)"
 Route to the appropriate sub-skill based on answer.
 
 **For unrecognized types:**
@@ -1831,6 +1909,11 @@ Stop.
 ## Dispatch
 
 Announce: "Type is `<type>` — routing to `<skill-name>`."
+
+**Loop-complete state guard:** If `currentFeature.state` is the loop-complete state for its
+type (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3 — or C7/F4 for aggregates), do NOT
+dispatch to a sub-skill. Display: "Feature is at loop-complete state <state> — run
+/colloquium:feature-integrate (or /colloquium:feature-verify for aggregates at C7)." Stop.
 
 Invoke the target skill via the Skill tool. Do not repeat any loop logic here.
 ```
@@ -1887,17 +1970,33 @@ Replace: `Require currentFeature.state = "F4".`
 With:
 
 ```markdown
-Require `currentFeature.state = "done"` for all types **except** `core:aggregate`.
-For `core:aggregate`: require `currentFeature.state = "F4"` (set by `feature-verify`).
+`feature-integrate` is the **sole owner** of the `"done"` transition for ALL types.
+Sub-skills advance to their loop-complete state; feature-integrate transitions to `"done"`.
 
-If type is `core:aggregate` and state is `done` but not `F4`:
-Display: "core:aggregate requires feature-verify before feature-integrate.
-Run /colloquium:feature-verify first."
+Entry state enforcement by type:
+
+| Type                    | Required entry state                    |
+| ----------------------- | --------------------------------------- |
+| `core:aggregate`        | `"F4"` (set by feature-verify after C7) |
+| `core:value-object`     | `"V4"`                                  |
+| `core:domain-service`   | `"S5"`                                  |
+| `backend:migration`     | `"M4"`                                  |
+| `backend:api`           | `"A4"`                                  |
+| `backend:event-handler` | `"E4"`                                  |
+| `backend:repository`    | `"R5"`                                  |
+| `backend:projection`    | `"Q5"`                                  |
+| `frontend:hook`         | `"H4"`                                  |
+| `frontend:api-client`   | `"F4"`                                  |
+| `frontend:component`    | `"D4"`                                  |
+| `frontend:page`         | `"P3"`                                  |
+
+If `currentFeature.state` does not match the expected entry state for its type:
+Display: "Feature is not at loop-complete state — expected <expected> but got <actual>.
+Finish all loop steps before integrating."
 Stop.
 
-If type is not `core:aggregate` and state is not `done`:
-Display: "Feature is not complete — finish all loop steps before integrating."
-Stop.
+Note: `frontend:api-client` at F4 and `core:aggregate` at F4 share the same state code
+but arrive there via different paths (F-loop vs feature-verify). The type field disambiguates.
 ```
 
 **Step 2:** Update the queue advance logic.
@@ -1925,17 +2024,17 @@ equals the type-appropriate initial state listed above (i.e., queued and not yet
 
 **Step 3:** Fix the `completedFeatures` write step.
 
-Find the line that writes to `completedFeatures`. Replace bare ID write:
+Find the line that writes to `completedFeatures`. Replace bare ID write with **idempotent** scoped format:
 
 ```
-completedFeatures.push(featureId)
+const scopedId = `${sliceId}/${featureId}`;
+if (!completedFeatures.includes(scopedId)) {
+  completedFeatures.push(scopedId);
+}
 ```
 
-With scoped format:
-
-```
-completedFeatures.push(`${sliceId}/${featureId}`)
-```
+This guards against crash-recovery scenarios where feature-integrate crashes after appending
+but before clearing `activeFeature`, causing a re-run that would create a duplicate entry.
 
 Verify no other code path writes bare (unscoped) IDs to `completedFeatures`.
 
@@ -2026,43 +2125,44 @@ Read `currentFeature.type` and `currentFeature.state`.
 | Type                                     | States | Route to                                                       |
 | ---------------------------------------- | ------ | -------------------------------------------------------------- |
 | `core:aggregate` (or legacy `aggregate`) | C0     | `feature-spec`                                                 |
-| `core:aggregate`                         | C2–C7  | `feature-implement` (dispatcher routes to aggregate sub-skill) |
-| `core:aggregate`                         | done   | `feature-integrate`                                            |
+| `core:aggregate`                         | C2–C6  | `feature-implement` (dispatcher routes to aggregate sub-skill) |
+| `core:aggregate`                         | C7     | `feature-verify` (UAT gate before integration)                 |
+| `core:aggregate`                         | F4     | `feature-integrate`                                            |
 | `core:value-object`                      | V0     | `feature-spec`                                                 |
 | `core:value-object`                      | V1–V3  | `feature-implement`                                            |
-| `core:value-object`                      | done   | `feature-integrate`                                            |
+| `core:value-object`                      | V4     | `feature-integrate` (loop-complete)                            |
 | `core:domain-service`                    | S0     | `feature-spec`                                                 |
 | `core:domain-service`                    | S1–S4  | `feature-implement`                                            |
-| `core:domain-service`                    | done   | `feature-integrate`                                            |
+| `core:domain-service`                    | S5     | `feature-integrate` (loop-complete)                            |
 | `backend:migration`                      | M0     | `feature-spec`                                                 |
 | `backend:migration`                      | M1–M3  | `feature-implement`                                            |
-| `backend:migration`                      | done   | `feature-integrate`                                            |
+| `backend:migration`                      | M4     | `feature-integrate` (loop-complete)                            |
 | `backend:api`                            | A0     | `feature-spec`                                                 |
-| `backend:api`                            | A1–A4  | `feature-implement`                                            |
-| `backend:api`                            | done   | `feature-integrate`                                            |
+| `backend:api`                            | A1–A3  | `feature-implement`                                            |
+| `backend:api`                            | A4     | `feature-integrate` (loop-complete)                            |
 | `backend:event-handler`                  | E0     | `feature-spec`                                                 |
-| `backend:event-handler`                  | E1–E4  | `feature-implement`                                            |
-| `backend:event-handler`                  | done   | `feature-integrate`                                            |
+| `backend:event-handler`                  | E1–E3  | `feature-implement`                                            |
+| `backend:event-handler`                  | E4     | `feature-integrate` (loop-complete)                            |
 | `backend:repository`                     | R0     | `feature-spec`                                                 |
 | `backend:repository`                     | R1–R4  | `feature-implement`                                            |
-| `backend:repository`                     | done   | `feature-integrate`                                            |
+| `backend:repository`                     | R5     | `feature-integrate` (loop-complete)                            |
 | `backend:projection`                     | Q0     | `feature-spec`                                                 |
 | `backend:projection`                     | Q1–Q4  | `feature-implement`                                            |
-| `backend:projection`                     | done   | `feature-integrate`                                            |
+| `backend:projection`                     | Q5     | `feature-integrate` (loop-complete)                            |
 | `frontend:api-client`                    | F0     | `feature-spec`                                                 |
 | `frontend:api-client`                    | F1–F3  | `feature-implement`                                            |
-| `frontend:api-client`                    | done   | `feature-integrate`                                            |
+| `frontend:api-client`                    | F4     | `feature-integrate` (loop-complete)                            |
 | `frontend:hook`                          | H0     | `feature-spec`                                                 |
-| `frontend:hook`                          | H1–H4  | `feature-implement`                                            |
-| `frontend:hook`                          | done   | `feature-integrate`                                            |
+| `frontend:hook`                          | H1–H3  | `feature-implement`                                            |
+| `frontend:hook`                          | H4     | `feature-integrate` (loop-complete)                            |
 | `frontend:component`                     | D0     | `feature-spec`                                                 |
-| `frontend:component`                     | D1–D4  | `feature-implement`                                            |
-| `frontend:component`                     | done   | `feature-integrate`                                            |
+| `frontend:component`                     | D1–D3  | `feature-implement`                                            |
+| `frontend:component`                     | D4     | `feature-integrate` (loop-complete)                            |
 | `frontend:page`                          | P0     | `feature-spec`                                                 |
-| `frontend:page`                          | P1–P3  | `feature-implement`                                            |
-| `frontend:page`                          | done   | `feature-integrate`                                            |
+| `frontend:page`                          | P1–P2  | `feature-implement`                                            |
+| `frontend:page`                          | P3     | `feature-integrate` (loop-complete)                            |
 
-For `core:aggregate` at state `C7`: route to `feature-verify` (UAT gate before integration).
+**"done" state for ANY type:** route to `feature-integrate` (already integrated — feature-integrate is idempotent for already-done features).
 
 For legacy types (`contract`, `read-model`): ask the user to reclassify before routing.
 Display: "Legacy feature type '<type>' — reclassify to a v3 type before proceeding.
@@ -2102,15 +2202,18 @@ Read the file first. The status dashboard needs to display descriptions for all 
 | V1    | JSDoc template approved                 |
 | V2    | Type/function signature written         |
 | V3    | Pure tests written                      |
+| V4    | Implementation complete (loop-complete) |
 | S0    | Queued (domain service)                 |
 | S1    | Interface template approved             |
 | S2    | Interface written in source             |
 | S3    | Mocked unit tests written               |
 | S4    | Implementation written (pre-review)     |
+| S5    | Code review passed (loop-complete)      |
 | M0    | Queued (migration)                      |
 | M1    | Schema.prisma updated                   |
 | M2    | Migration file generated                |
 | M3    | Migration deployed to test DB           |
+| M4    | Migration verified (loop-complete)      |
 | A0    | Queued (API)                            |
 | A1    | Spec written (table format)             |
 | A2    | Contract tests written                  |
@@ -2126,11 +2229,13 @@ Read the file first. The status dashboard needs to display descriptions for all 
 | R2    | Interface written                       |
 | R3    | Integration tests written               |
 | R4    | Implementation written (pre-review)     |
+| R5    | Code review passed (loop-complete)      |
 | Q0    | Queued (projection)                     |
 | Q1    | Spec acknowledged                       |
 | Q2    | Interface written                       |
 | Q3    | Integration tests written               |
 | Q4    | Implementation written (pre-review)     |
+| Q5    | Code review passed (loop-complete)      |
 | H0    | Queued (hook)                           |
 | H1    | JSDoc written                           |
 | H2    | State machine tests written             |
@@ -2140,6 +2245,7 @@ Read the file first. The status dashboard needs to display descriptions for all 
 | F1    | JSDoc template approved                 |
 | F2    | Interface written                       |
 | F3    | Tests written                           |
+| F4    | Implementation complete (loop-complete) |
 | D0    | Queued (component — needs feature-spec) |
 | D1    | Design approved (design.md written)     |
 | D2    | RTL tests written                       |
@@ -2208,13 +2314,15 @@ and blocks if `feature.state = "D0"` with a message directing to `feature-spec`.
 Read `feature-implement-page.md` — confirm it enforces `feature.state ∈ {P1, P2, P3}`
 and blocks if `feature.state = "P0"` with a message directing to `feature-spec`.
 
-**Step 7:** Update `simulate.md` routing tables to add the 5 new types (V, S, M, E, Q) and
-their embedded step tables. Verify the dispatcher resolution table in simulate.md matches the
-dispatcher routing table in feature-implement.md exactly.
+**Step 7:** If `simulate.md` exists (optional dry-run skill), update its routing tables to add
+all 12 types and their embedded step tables. Verify any dispatcher resolution table in
+simulate.md matches the dispatcher routing table in feature-implement.md exactly.
+If `simulate.md` does not exist, skip this step — it is not required for v3.
 
-**Step 8:** Verify `sdlc.md` routing table handles all new states:
-Read `sdlc.md` — confirm routing covers V0–V3, S0–S4, M0–M3, A0–A4, E0–E4, R0–R4, Q0–Q4,
-H0–H4, F0–F3, D0–D4, P0–P3 in addition to existing C0–C7.
+**Step 8:** Verify `sdlc.md` routing table handles all new states (including loop-complete):
+Read `sdlc.md` — confirm routing covers V0–V4, S0–S5, M0–M4, A0–A4, E0–E4, R0–R5, Q0–Q5,
+H0–H4, F0–F4, D0–D4, P0–P3 in addition to existing C0–C7 and F4.
+Loop-complete states (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) must route to `feature-integrate`.
 
 **Step 9:** Verify `status.md` state descriptions:
 Read `status.md` — confirm all new state codes have descriptions.
@@ -2233,18 +2341,19 @@ git commit -m "feat(sdlc): complete v3 taxonomy — dispatcher + 12 loops + type
 ## Success Checklist
 
 - [ ] `colloquium:project.md` deleted
-- [ ] CLAUDE.md ≤ 200 lines, contains taxonomy (12 types), testing strategy, quality gate, file locations, conventions
-- [ ] state.json at `schemaVersion: 3`, all completedFeatures in scoped format
-- [ ] `feature-implement.md` is the dispatcher (no loop logic), routes 12 types
+- [ ] CLAUDE.md ≤ 200 lines, contains taxonomy (12 types), testing strategy, quality gate, file locations, conventions; app names match actual (`colloquium-api`, `colloquium-web`)
+- [ ] state.json at `schemaVersion: 3`, all completedFeatures in scoped format (idempotent append)
+- [ ] `feature-implement.md` is the dispatcher (no loop logic), routes 12 types; blocks any feature already at a loop-complete state (routes to `feature-integrate` instead)
 - [ ] 12 sub-skill files exist: aggregate, value-object, domain-service, migration, api, event-handler, repository, projection, hook, api-client, component, page
+- [ ] Each sub-skill writes a **loop-complete** state (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) — **never** writes "done"
 - [ ] `feature-spec.md` routes by type (12 branches including D0→D1 via ui-design-expert, P0→P1, F0→F1)
-- [ ] `feature-verify.md` enforces C7 / core:aggregate only
-- [ ] `slice-deliver.md` uses compound types + sequential ordering rule (no start-gate); queue scanner uses type-appropriate initial states
-- [ ] `feature-integrate.md` accepts `done` for all non-aggregate types; queue scanner checks type-appropriate initial states; completedFeatures written in scoped format
-- [ ] `feature-implement-component.md` enforces entry at D1, blocks D0; code review at D3 before D4
-- [ ] `feature-implement-page.md` enforces entry at P1, blocks P0
-- [ ] `feature-implement-hook.md` is React-hooks-only; H2 always asserts something real (no expect(true).toBe(true))
-- [ ] `feature-implement-api-client.md` exists; uses vi.spyOn(globalThis, 'fetch'); no RTL
-- [ ] `simulate.md` routing tables match feature-implement.md dispatcher exactly (12 types)
-- [ ] `sdlc.md` routing table handles all v3 state codes (V/S/M/A/E/R/Q/H/F/D/P + legacy C)
-- [ ] `status.md` state description table covers all new state codes
+- [ ] `feature-verify.md` enforces C7 / core:aggregate only (UAT hard gate for the C-loop)
+- [ ] `slice-deliver.md` decomposes all 12 types (core, backend, frontend); uses compound types + sequential ordering rule (no start-gate); queue scanner uses type-appropriate initial states
+- [ ] `feature-integrate.md` accepts **loop-complete states** (V4, S5, M4, A4, E4, R5, Q5, H4, F4, D4, P3) and F4 (aggregate UAT); is the **sole owner** of the `done` transition; queue scanner checks type-appropriate initial states; completedFeatures written in scoped format with duplicate guard
+- [ ] `feature-implement-component.md` enforces entry at D1, blocks D0; code review at D3 before D4 (loop-complete)
+- [ ] `feature-implement-page.md` enforces entry at P1, blocks P0; P3 is loop-complete (assembly-first, not TDD)
+- [ ] `feature-implement-hook.md` is React-hooks-only; H2 always asserts something real (no expect(true).toBe(true)); H4 is loop-complete
+- [ ] `feature-implement-api-client.md` exists; uses vi.spyOn(globalThis, 'fetch'); no RTL; F4 is loop-complete
+- [ ] If `simulate.md` exists, its routing tables match feature-implement.md dispatcher exactly (12 types)
+- [ ] `sdlc.md` routing table handles all v3 state codes including loop-complete states (V0–V4, S0–S5, M0–M4, A0–A4, E0–E4, R0–R5, Q0–Q5, H0–H4, F0–F4, D0–D4, P0–P3 + legacy C0–C7 + F4); loop-complete states route to `feature-integrate`
+- [ ] `status.md` state description table covers all new state codes including loop-complete states (V4, S5, M4, R5, Q5, F4)
