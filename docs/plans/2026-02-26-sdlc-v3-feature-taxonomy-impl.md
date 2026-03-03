@@ -241,18 +241,38 @@ When invoked as `/colloquium:version --migrate-v3`:
 
 5. Write the updated state.json.
 
-6. Scan all features across all slices. Collect any features with `state ≠ "done"`.
-   Leave their `type` values as-is (do NOT auto-reclassify — requires human judgement).
+6. **Hard gate: check for in-progress features.** Scan all features across all slices.
+   Collect any features with `state ∉ {"done", "C0"}` (i.e., mid-loop features).
+   If any are found, display:
 
-7. Display:
+   ```
+   ❌ Cannot migrate: <count> feature(s) are mid-loop.
+
+   <list each: sliceId/featureId, current type, current state>
+
+   Migration requires all features to be at "done" or "C0" (not started).
+   Options:
+   1. Complete the in-progress features first, then re-run --migrate-v3.
+   2. Rollback mid-loop features to C0 manually, then re-run --migrate-v3.
+      (Any work in progress will be lost — delete generated artifacts first.)
+   ```
+
+   Then stop. Do NOT proceed with migration.
+
+   Features at `C0` are safe — they haven't entered the loop yet. After migration, `C0`
+   maps to the new loop's initial state during reclassification (step 8).
+
+   Features at `done` are safe — they won't be routed again.
+
+7. If the hard gate passes (all features at `done` or `C0`), display:
 
 ```
 ✅ Migrated to schemaVersion 3
 Normalized completedFeatures: <count> bare IDs → scoped format
 New features should use {domain}:{type}:{name} format with variant field.
 
-⚠️ In-progress features (type must be manually reclassified before resuming):
-<list each: featureId, current type, current state — or "none" if all done>
+Features at C0 (must be reclassified before resuming):
+<list each: featureId, current type — or "none" if all done>
 
 ⚠️ Legacy "contract" features require manual reclassification:
 The dispatcher cannot auto-route "contract" — it may be backend:handler (api) or
@@ -260,38 +280,19 @@ backend:handler (event). Reclassify and set variant before running /colloquium:f
 <list each: featureId with type="contract", regardless of state>
 ```
 
-8. **State mapping for reclassified in-progress features:** When the user reclassifies a legacy
-   feature that is NOT at `done` state, apply per-C-state mapping (not ranges):
+8. **State mapping for reclassified C0 features:** The hard gate at step 6 ensures only
+   `done` and `C0` features exist at migration time. When the user reclassifies a legacy
+   `C0` feature, apply these mappings:
+   - `aggregate` at C0 → `core:aggregate` at C0 (unchanged)
+   - `contract` at C0 → `backend:handler` at A0 (ask user for variant: api or event)
+   - `read-model` at C0 → ask user: which type? Then map C0 to initial state:
+     - `frontend:client` (hook) → F0
+     - `frontend:client` (api-client) → F0
+     - `frontend:visual` (component) → D0
+     - `frontend:visual` (page) → D0
 
-   **For `contract` → `backend:handler`:**
-
-   | Legacy state | → variant: api | → variant: event |
-   | ------------ | -------------- | ---------------- |
-   | C0           | A0             | A0               |
-   | C2           | A1             | A1               |
-   | C3           | A2             | A2               |
-   | C4           | A3             | A3               |
-   | C5           | A3             | A3               |
-   | C6           | A3             | A3               |
-   | C7           | A4             | A4               |
-
-   **For `read-model` → frontend types:**
-
-   | Legacy state | → client (hook) | → client (api-client) | → visual (component) | → visual (page) |
-   | ------------ | --------------- | --------------------- | -------------------- | --------------- |
-   | C0           | F0              | F0                    | D0                   | D0              |
-   | C2           | F1              | F1                    | D1                   | D1              |
-   | C3           | F2              | F2                    | D2                   | D2              |
-   | C4           | F3              | F3                    | D3                   | D3              |
-   | C5           | F3              | F3                    | D3                   | D3              |
-   | C6           | F3              | F3                    | D3                   | D3              |
-   | C7           | F4              | F4                    | D3                   | D3              |
-
-   Write the mapped state to state.json. Display a warning:
-   "State mapped from legacy C-state <old> → <new>. The mapping is approximate — review the
-   current sub-step before proceeding."
-
-   Legacy features at `done` state are unaffected.
+   Write the mapped type/variant/state to state.json.
+   Legacy features at `done` state are unaffected — no reclassification needed.
 ````
 
 Commit:
@@ -353,23 +354,32 @@ For each contract in `currentSlice.contracts`:
 
 ### Decomposition — Frontend Types
 
+**Resolve `feature.app` before creating frontend features:**
+If all pages in the slice target a single app (check model.md), set `feature.app` to that
+app name for all `frontend:client` and `frontend:visual` (page variant) features.
+If the slice spans multiple apps, ask the user per feature via AskUserQuestion.
+`frontend:visual` component variant does NOT get `feature.app` (lives in `packages/ui/`).
+
 For each API endpoint exposed by a `backend:handler` (api variant):
 
 - Create one `frontend:client` feature (variant: `api-client`).
-  Dependency: the `backend:handler` feature.
+  Set `feature.app` to the consuming app. Dependency: the `backend:handler` feature.
 
 For each React hook needed to wire API data to UI:
 
 - Create one `frontend:client` feature (variant: `hook`).
+  Set `feature.app` to the consuming app.
   Dependency: the `frontend:client` (api-client) it wraps (if any).
 
 For each reusable UI component:
 
 - Create one `frontend:visual` feature (variant: `component`). Dependency: none.
+  No `feature.app` — lives in `packages/ui/`.
 
 For each page assembling hooks + components:
 
 - Create one `frontend:visual` feature (variant: `page`).
+  Set `feature.app` to the target app.
   Dependency: the hooks and components it uses.
 
 **Frontend splitting criteria (when to create a separate feature vs. inline):**
@@ -571,7 +581,9 @@ _api variant:_ endpoint path + method, Zod request/response, auth, error mapping
 _event variant:_ event name, CT-NNN reference (file MUST exist), consumed Zod schema, command
 produced, error handling. Before writing: verify CT-NNN file exists.
 
-If spec exceeds 30 lines: split into two features. Do not proceed.
+If spec exceeds 50 lines: STOP. Display: "Spec too large (>50 lines). The endpoint is doing
+too much — split the ENDPOINT, not just the feature. Return to /colloquium:slice-deliver to
+redecompose." Set feature to stuck with reason "spec-too-large". Do not proceed.
 File: `docs/features/<bc>/<Name>/spec.md`.
 State advance: A0 → A1.
 
@@ -656,23 +668,32 @@ git commit -m "feat(sdlc): make feature-spec type-aware — 7-type routing with 
 
 Write each file in order. All are invoked by the dispatcher (Task 8), not by the user directly.
 
+**IMPORTANT: Both cross-cutting templates below MUST be included in EVERY sub-skill file.**
+Each sub-skill's change list (Tasks 7a–7f) specifies type-specific changes only. The two
+cross-cutting concerns below are always included — do not omit them even if the change list
+doesn't re-state them.
+
 **Cross-cutting: quality gate tiers.** Every sub-skill has two quality gate tiers:
 
 - **Light gate** (mid-loop advances): `pnpm turbo typecheck` + `pnpm turbo lint` + `pnpm --filter <affected-package> test`
 - **Full gate** (loop-complete advance ONLY): `pnpm turbo typecheck` + `pnpm turbo lint` + `pnpm turbo test` (all packages)
 
-**Exception:** L-loop value-object variant skips mid-loop light gates. Full gate at L4 only.
+**Exception:** L-loop value-object variant skips mid-loop light gates. Full gate at L3→done only.
 
 **Cross-cutting: stuck handling.** Every sub-skill file must include in its Enforcement Rules:
 
 ```markdown
-N. **Stuck escape hatch.** At any human checkpoint or quality gate failure, if the user
-replies `stuck: <reason>`, trigger the stuck-handling flow:
+N. **Stuck escape hatch.** At every human checkpoint or quality gate failure, include an
+"I'm stuck" option in the AskUserQuestion alongside the normal options. Do NOT rely on
+free-text pattern matching. When the user selects "I'm stuck", ask a follow-up for the
+reason, then trigger the stuck-handling flow:
 
 - Record history entry: `{ type: "stuck", reason: "<reason>", state: "<current>" }`
 - Ask via AskUserQuestion: Rollback (reset to initial), Remove (skip), Reclassify (change type),
   or Pause (set `feature.paused = true`, advance to next feature).
-- **Reclassify:** resets to new loop's initial state. Old artifacts deleted.
+- **Reclassify:** resets to new loop's initial state. Old artifacts deleted. Before executing:
+  list all files that will be deleted and ask "These files will be deleted. Proceed?"
+- **Rollback:** also list files that will be deleted before executing.
 - **Pause resume:** paused features are offered by the queue scanner after all initial-state
   features are exhausted. User can also force-resume via `/colloquium:sdlc --resume <feat-id>`.
 - Update state.json. Display: "Feature <feat-id> marked as <choice>. Run /colloquium:sdlc."
@@ -1380,7 +1401,7 @@ Design: <design.md path (component) or page file path (page)>
 
 ---
 
-## D1 → D2: Tests
+## D1 → D2: Tests (component) / Tests + Confirm Pass (page)
 
 ### component variant:
 
@@ -1389,20 +1410,21 @@ Read design.md. Write RTL tests (all hooks mocked via vi.fn()):
 - One test per visual state
 - Interaction tests (click, input, submit)
 - Conditional display tests
-  All must FAIL before component exists.
+  All must FAIL before component exists. (TDD — tests drive D3 implementation.)
 
 ### page variant:
 
 Page was assembled at D1 (by feature-spec writing JSDoc + this loop assembling the page).
 Assemble the page if not yet done:
 
-- Import hooks from apps/\*/src/hooks/, components from packages/ui
+- Import hooks from `apps/${feature.app}/src/hooks/`, components from `packages/ui`
 - Handle all states: loading, error, empty, populated
 
 Write RTL tests (hooks mocked): loading state, error state, populated state.
-Tests must PASS (assembly-first — tests verify already-assembled page).
+Tests must PASS — because the page was already assembled at D1 (verification-first; pages
+are pure assembly with no new logic, so there is no separate "implement" step).
 If tests FAIL: fix assembly at D2, re-run. Stay at D2 until passing. Do NOT go back to D1
-(that would re-do the plan). If the plan itself is wrong, use `stuck: <reason>` → Rollback.
+(that would re-do the plan). If the plan itself is wrong, use stuck handler → Rollback.
 
 Quality gate. State write: `"D2"`.
 
@@ -1708,7 +1730,9 @@ Each sub-skill file embeds its own `## Integration Checklist` section as a refer
 | `core:aggregate`, `backend:handler` (evt)  | Upstream wiring, downstream wiring, policy documents, feature flag lifecycle  |
 | `backend:handler` (api), `backend:persist` | Feature flag lifecycle, verify no N+1 escaped review                          |
 | `backend:migration`                        | Rollback SQL verified at `docs/migrations/rollbacks/`, feature flag lifecycle |
-| `frontend:client` (hook), `frontend:vis`   | Feature flag lifecycle                                                        |
+| `frontend:client` (hook)                   | Feature flag lifecycle                                                        |
+| `frontend:visual` (component)              | Feature flag lifecycle                                                        |
+| `frontend:visual` (page)                   | Route reachable from expected entry points, feature flag lifecycle            |
 | `core:primitive`, `frontend:client` (api)  | N/A — loop writes done directly, never reaches feature-integrate              |
 
 All four checklist items (or applicable subset) must be explicitly addressed — even if the
@@ -1802,41 +1826,41 @@ Read the file first. Add state descriptions for all new prefixes:
 ```markdown
 ### State Code Descriptions
 
-| Code  | Meaning                                 |
-| ----- | --------------------------------------- |
-| L0    | Queued (primitive)                      |
-| L1    | JSDoc/interface template approved       |
-| L2    | Signature + tests written               |
-| L3    | Implementation complete                 |
-| L4    | Done (L-loop writes done directly)      |
-| M0    | Queued (migration)                      |
-| M1    | Schema.prisma updated                   |
-| M2    | Migration file generated                |
-| M3    | Migration deployed to test DB           |
-| M4    | Migration verified (loop-complete)      |
-| A0    | Queued (handler)                        |
-| A1    | Spec written (table format)             |
-| A2    | Tests written                           |
-| A3    | Handler implemented                     |
-| A4    | Code review complete (loop-complete)    |
-| R0    | Queued (persistence)                    |
-| R1    | Spec acknowledged                       |
-| R2    | Interface written                       |
-| R3    | Integration tests written               |
-| R4    | Implementation written (pre-review)     |
-| R5    | Code review passed (loop-complete)      |
-| F0    | Queued (client)                         |
-| F1    | JSDoc template approved                 |
-| F2    | Interface + tests written               |
-| F3    | Implementation complete                 |
-| F4    | Convention check passed (loop-complete) |
-| D0    | Queued (visual — needs feature-spec)    |
-| D1    | Design/plan approved                    |
-| D2    | Tests written                           |
-| D3    | Implemented + reviewed                  |
-| D4    | Visual/E2E gate confirmed               |
-| UV    | UAT verified (aggregate only)           |
-| C0–C7 | (Unchanged — aggregate states)          |
+| Code  | Meaning                                                          |
+| ----- | ---------------------------------------------------------------- |
+| L0    | Queued (primitive)                                               |
+| L1    | JSDoc/interface template approved                                |
+| L2    | Signature + tests written                                        |
+| L3    | Implementation complete                                          |
+| L4    | Done (L-loop writes done directly)                               |
+| M0    | Queued (migration)                                               |
+| M1    | Schema.prisma updated                                            |
+| M2    | Migration file generated                                         |
+| M3    | Migration deployed to test DB                                    |
+| M4    | Migration verified (loop-complete)                               |
+| A0    | Queued (handler)                                                 |
+| A1    | Spec written (table format)                                      |
+| A2    | Tests written                                                    |
+| A3    | Handler implemented                                              |
+| A4    | Code review complete (loop-complete)                             |
+| R0    | Queued (persistence)                                             |
+| R1    | Spec acknowledged                                                |
+| R2    | Interface written                                                |
+| R3    | Integration tests written                                        |
+| R4    | Implementation written (pre-review)                              |
+| R5    | Code review passed (loop-complete)                               |
+| F0    | Queued (client)                                                  |
+| F1    | JSDoc template approved                                          |
+| F2    | Interface + tests written                                        |
+| F3    | Implementation complete                                          |
+| F4    | Convention check passed (loop-complete)                          |
+| D0    | Queued (visual — needs feature-spec)                             |
+| D1    | Design/plan approved                                             |
+| D2    | Tests written (component: FAIL) / tests written + passing (page) |
+| D3    | Implemented + reviewed                                           |
+| D4    | Visual/E2E gate confirmed                                        |
+| UV    | UAT verified (aggregate only)                                    |
+| C0–C7 | (Unchanged — aggregate states)                                   |
 ```
 
 **Step 2:** Update schemaVersion check to accept `{2, 3}` (both).

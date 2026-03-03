@@ -168,6 +168,32 @@ the first feature (in topological-then-type-precedence order) whose state equals
 type-appropriate initial state **AND all entries in its `dependencies` array exist in
 `completedFeatures`**.
 
+### Queue Advance Algorithm (Canonical — Single Source of Truth)
+
+**Three code paths write `done` and advance the queue:** `feature-integrate` (most types),
+the L-loop (core:primitive), and the F-loop (frontend:client api-client variant). All three
+MUST use this identical algorithm. Do NOT duplicate or reimplement — reference this section.
+
+```
+1. Write feature.state = "done".
+2. Append `${sliceId}/${featureId}` to completedFeatures (idempotent — skip if present).
+3. Scan featureOrder in topological-then-type-precedence order:
+   a. Skip features with state ≠ type-appropriate initial state.
+   b. Skip features whose history contains { type: "removed" }.
+   c. Skip features whose dependencies are NOT all in completedFeatures.
+   d. First passing feature: set activeFeature = "versionId/sliceId/featureId". Done.
+4. If no feature found at initial state, scan for paused features
+   (feature.paused = true AND all dependencies in completedFeatures).
+   Offer via AskUserQuestion: "Paused feature <feat-id> is eligible. Resume or skip?"
+   On resume: set paused = false, set activeFeature. Feature continues from current state.
+5. If no feature found at all: set activeFeature = null. Queue exhausted.
+   Display: "All features complete for <sliceId>. Next: /colloquium:slice-validate."
+```
+
+**Implementation rule:** `feature-integrate`, the L-loop's done-write step, and the F-loop's
+api-client done-write step must each reference "Queue Advance Algorithm" from this design doc.
+If the algorithm changes, all three locations update by reference, not by copy.
+
 **Cross-slice dependencies:** `completedFeatures` is version-scoped, so features from prior
 slices are visible. When `slice-deliver` generates features for SL-003 that depend on SL-002
 artifacts, it adds `"SL-002/feat-001"` (scoped format) to the `dependencies` array. The
@@ -190,7 +216,7 @@ Two tiers. Which tier runs depends on whether the state advance is mid-loop or l
 2. `pnpm turbo lint` — zero new ESLint warnings in modified files
 3. Tests in the affected package only — `pnpm --filter <affected-package> test`
 
-**Full gate (loop-complete state advances only — L4, M4, A4, R5, F4, D4, C7):**
+**Full gate (loop-complete state advances only — L3→done, M4, A4, R5, F3→done(api-client), F4, D4, C7):**
 
 1. `pnpm turbo typecheck` — zero TypeScript errors
 2. `pnpm turbo lint` — zero new ESLint warnings in modified files
@@ -210,7 +236,7 @@ Two tiers. Which tier runs depends on whether the state advance is mid-loop or l
 
 **Exception — L-loop (core:primitive) skips mid-loop light gates.** For a 5-line branded type,
 running 45-90 seconds of CI per gate × 3 gates is disproportionate. Pure functions have zero
-side effects — typecheck catches type errors, and the full gate at L4 catches cross-package
+side effects — typecheck catches type errors, and the full gate at L3→done catches cross-package
 regressions. The `service` variant still runs the full gate at loop-complete.
 
 ### Test DB Availability Check
@@ -226,8 +252,15 @@ activating this feature." and block the loop from proceeding.
 
 ### Cross-Loop Stuck Handling
 
-Every sub-skill must support the `stuck` escape hatch. If a loop cannot advance, the user can
-reply `stuck: <reason>` at any human checkpoint or quality gate failure.
+Every sub-skill must support the `stuck` escape hatch at every human checkpoint and quality
+gate failure.
+
+**Trigger mechanism:** At every human checkpoint or quality gate failure, include an
+"I'm stuck" option in the AskUserQuestion alongside the normal options (e.g., "confirmed",
+"fix: description"). Do NOT rely on free-text pattern matching like `stuck: <reason>` —
+use structured AskUserQuestion options only. When the user selects "I'm stuck", ask a
+follow-up: "Briefly describe the reason:" (free-text input is acceptable for the reason
+AFTER the structured trigger).
 
 **When `stuck` is triggered:**
 
@@ -253,7 +286,10 @@ no reset.
 
 Alternatively, the user can force-resume at any time by running `/colloquium:sdlc --resume <feat-id>`,
 which sets `activeFeature` to the named feature (must exist and not be `done` or `removed`)
-and clears `paused` if set.
+and clears `paused` if set. **`--resume` MUST also update `activeSlice`** to match the
+resumed feature's slice (derive from the feature's path: `versionId/sliceId`). Without this,
+`activeSlice` and `activeFeature` become inconsistent and cursor resolution breaks in every
+skill that reads `activeSlice` to find `currentSlice`.
 
 ---
 
@@ -288,20 +324,24 @@ L3 → implementation complete + exported from package index:
      - service: implement, run tests (all PASS), export. Code review:
        All dependencies injected? Stateless? No hidden I/O?
        (Code review failure → fix in-place at L3, re-run quality gate, re-request review.)
-L4 → loop-complete. Done written directly by L-loop (skips feature-integrate).
-     Trivial types have no integration concerns — feature-integrate is pure ceremony for them.
+     Full quality gate runs at end of L3. On pass: L-loop writes "done" directly
+     (skips feature-integrate). Trivial types have no integration concerns.
+     There is NO L4 state code. L3 → (full gate) → done is atomic from the state machine's
+     perspective. The full gate at loop-complete is gated by L3's quality check.
 ```
 
 **Package prerequisite:** If `packages/<bc-name>/` does not exist yet (first core feature in a
 new BC), create the package scaffold before L2: `package.json`, `tsconfig.json`, `src/index.ts`.
 
 State writes: L0 activation, L1 (by feature-spec), L2 (signature + tests), L3 (implementation),
-L4 (done — written by L-loop, NOT by feature-integrate). Four writes per feature.
+done (written by L-loop directly from L3, NOT by feature-integrate). Four writes per feature.
 
 **Batched features:** For bundles, L1 is approved for the entire bundle. L2→L3 repeat per item.
-After each item's L3 completes, set `item.status = "done"` in state.json. On session resume,
-skip items with `status = "done"` and continue from the first `"pending"` item.
-L4 is written once for the feature after all items complete. Quality gate runs once at L4.
+During L1→L2: after writing each item's signature + tests, set `item.status = "tested"`.
+During L2→L3: after implementing each item, set `item.status = "done"`.
+On session resume, skip items already at the current phase's target status and continue from
+the first item that hasn't reached it. This enables crash recovery in BOTH phases.
+Full quality gate runs once after all items complete, then L-loop writes `done` directly.
 
 ---
 
@@ -493,10 +533,10 @@ F2 → interface + tests written in source file:
 F3 → implementation complete + quality gate:
      - api-client: implement, run tests (all PASS), export.
      - hook: implement, run all tests (pure + RTL PASS), export.
-F4 → convention check + loop-complete:
-     - api-client: no convention check. Done written directly by F-loop (skips
-       feature-integrate). Typed fetch wrappers have no integration concerns — no events, no
-       cross-cutting policies, no wiring. Same rationale as L-loop for core:primitive.
+F4 → convention check + loop-complete (hook variant only):
+     - api-client: There is NO F4 state code for api-client. F3 → (full gate) → done is
+       atomic. The F-loop writes done directly from F3 (skips feature-integrate). Typed fetch
+       wrappers have no integration concerns — no events, no policies, no wiring.
      - hook: verify exported from apps/*/src/hooks/, TypeScript interface exported as named type,
        returns named state values (not boolean flags), JSDoc matches F1 template.
        Fix in-place if any fail — F4 is a verify checkpoint, not a restart.
@@ -535,13 +575,16 @@ D1 → design/plan approved:
      - page: assembly plan JSDoc in page file (written by feature-spec). Page assembled from plan:
        import hooks, import components, handle all states (loading, error, empty, populated).
        Quality gate runs here for page variant.
-D2 → tests written:
+D2 → tests written (component) / tests written AND passing (page):
      - component: RTL tests (all hooks mocked via vi.fn()). One test per visual state,
-       interaction tests, conditional display tests. All must FAIL.
+       interaction tests, conditional display tests. All must FAIL (TDD — tests drive D3).
      - page: RTL tests (all hooks mocked). Wiring correctness: loading renders indicator,
        error renders message, populated renders components with correct props.
-       Tests must PASS (assembly-first — tests verify already-assembled page).
-       If tests FAIL: fix assembly at D2, re-run. Stay at D2 until passing.
+       Tests must PASS — because the page was already assembled at D1 (verification-first;
+       see "Exception — D-loop page variant" at the top of this section).
+       If tests FAIL: fix the assembly at D2, re-run. Stay at D2 until passing.
+       D2 is the combined "write tests + confirm they pass" state for pages — there is no
+       separate "implement" step because the page is pure assembly with no new logic.
 D3 → implemented + reviewed:
      - component: implement per design.md. Tailwind, shadcn/ui, zero inline styles.
        Generate visual harness at packages/ui/src/<ComponentName>/__visual__/<ComponentName>.visual.tsx
@@ -565,18 +608,19 @@ Document the required providers in `packages/ui/src/__visual__/providers.tsx` on
 harnesses import from there. Without matching providers, a component can pass D4 and look
 broken in the actual app.
 
-**Provider sync test (mandatory):** `packages/ui` must include a test that imports both
-`providers.tsx` and the app's root layout/providers, then asserts they export the same set of
-provider component names. This catches drift when the app adds a new provider (e.g.,
-internationalization) but the visual harness is not updated. The test should be co-located at
-`packages/ui/src/__visual__/providers.test.ts`. If the app's provider list is not importable
-(circular dependency), document the canonical provider list as a const array in `providers.tsx`
-and keep the assertion manual — checked during D4 visual gate.
+**Provider sync check (D4 gate checklist item, not automated test):** `packages/ui` cannot
+import from `apps/` (monorepo boundary rule). An automated provider sync test would require
+a circular dependency. Instead: document the canonical provider list as a const array in
+`providers.tsx`. At every D4 visual gate, the checklist includes: "Verify providers.tsx
+provider list matches the target app's root layout providers." This is a manual check — if
+providers drift, the D4 screenshot comparison will usually catch the visual difference, and
+this checklist item catches the cases where drift is invisible (e.g., a new i18n provider
+that doesn't affect visual rendering).
 
 **D-loop P-loop gap fix (page variant):** If D2 RTL tests reveal the assembly is incorrect,
 the fix happens at D2 — edit the assembly, re-run tests, stay at D2 until passing. Do NOT go
 back to D1 (that would re-do the assembly plan). If the assembly plan itself is wrong (not just
-the implementation), use `stuck: <reason>` → Rollback to D1.
+the implementation), use the stuck handler → Rollback to D1.
 
 State writes: D1 (feature-spec), D2, D3, D4. Four writes. `done` by feature-integrate.
 
@@ -611,7 +655,8 @@ is defined HERE (in the design doc) and embedded in the sub-skill files, NOT har
 | `backend:persistence`                     | Feature flag lifecycle, verify no N+1 escaped review                          |
 | `backend:migration`                       | Rollback SQL verified at `docs/migrations/rollbacks/`, feature flag lifecycle |
 | `frontend:client` (hook)                  | Feature flag lifecycle                                                        |
-| `frontend:visual`                         | Feature flag lifecycle                                                        |
+| `frontend:visual` (component)             | Feature flag lifecycle                                                        |
+| `frontend:visual` (page)                  | Route reachable from expected entry points, feature flag lifecycle            |
 | `core:primitive`, `frontend:client` (api) | N/A — loop writes `done` directly, skips `feature-integrate`                  |
 
 `feature-integrate` is a **dispatcher for the checklist**, not the owner of checklist content.
@@ -643,7 +688,8 @@ The actual directories are `apps/colloquium-api` and `apps/colloquium-web`.
 - Backend conventions (~8 lines)
 - Frontend conventions (~8 lines, absorbs `cn` rule)
 
-**Result: ~128 lines.** 122 lines of headroom for future additions.
+**Estimated result: ~128 lines.** (96 current − ~28 removed + ~60 added.) ~122 lines of
+headroom. Actual count may vary — verify after Task 2 and adjust if near 200 lines.
 
 ---
 
@@ -711,20 +757,45 @@ etc.). Legacy values (`aggregate`, `contract`, `read-model`) preserved as-is.
 - `frontend:visual`: `"component"` or `"page"`
   Types without variants (`core:aggregate`, `backend:migration`) omit this field.
 
+**Feature paused field (new, optional):** `feature.paused` — boolean. Set to `true` by the
+stuck handler's "Pause" option. The queue scanner skips paused features during normal
+scanning (step 3 of Queue Advance Algorithm) and offers them after exhausting all
+initial-state features (step 4). Cleared by `--resume` or by the user accepting the
+queue scanner's resume prompt. Omitted (or `false`) for active features.
+
 **Feature app field (new, optional):** `feature.app` — required for `frontend:client` and
-`frontend:visual` features. Specifies which app directory the feature targets (e.g.,
-`"colloquium-web"`, `"sonar"`). `slice-deliver` sets this based on the slice's bounded context.
-If a slice spans multiple apps, `slice-deliver` asks the user per feature via AskUserQuestion.
-Path resolution uses `apps/${feature.app}/src/...` instead of `apps/*/src/...`.
-Omitted for `core:*` and `backend:*` features (they target fixed locations).
+`frontend:visual` (page variant) features. Specifies which app directory the feature targets
+(e.g., `"colloquium-web"`, `"sonar"`). Path resolution uses `apps/${feature.app}/src/...`
+instead of `apps/*/src/...`. Omitted for `core:*` and `backend:*` features (they target
+fixed locations). Also omitted for `frontend:visual` component variant (those live in
+`packages/ui/`, not in an app directory).
+
+**How `slice-deliver` resolves `feature.app`:**
+
+1. If the slice targets a single app (the common case), all frontend features inherit that
+   app name. `slice-deliver` infers this from the slice's model.md — if all endpoints are
+   in one API app and all pages are in one web app, the mapping is unambiguous.
+2. If the slice spans multiple apps (e.g., both `colloquium-web` and `sonar` consume the
+   same API), `slice-deliver` asks the user per feature via AskUserQuestion: "Which app
+   does `<feature-name>` target?" with options listing each app directory found in `apps/`.
+3. If no app can be inferred (e.g., a hook with no obvious consumer), default to the app
+   that contains the page feature in the same slice. If multiple page features target
+   different apps, ask the user.
 
 **Feature items array (new, optional):** For batched `core:primitive` features (value-object
 variant), `feature.items` is an array of
-`{ name: string, kind: "value-object" | "policy", status: "pending" | "done" }`.
-The `status` field tracks per-item progress within the bundle for crash recovery. The L-loop
-sets `status = "done"` after each item's L2→L3 cycle completes. On session resume, the L-loop
-skips items with `status = "done"` and continues from the first `"pending"` item.
-Omitted for non-batched features.
+`{ name: string, kind: "value-object" | "policy", status: "pending" | "tested" | "done" }`.
+The `status` field tracks per-item progress within the bundle for crash recovery:
+
+- `"pending"` → item not yet started
+- `"tested"` → signature + tests written (L1→L2 phase complete for this item)
+- `"done"` → implementation complete (L2→L3 phase complete for this item)
+  The L-loop sets `status = "tested"` after writing each item's signature + tests, and
+  `status = "done"` after implementing each item. On session resume, the L-loop skips items
+  that are already at the current phase's target status and continues from the first item
+  that hasn't reached it. This prevents re-doing already-written signatures/tests after a
+  crash during the L1→L2 phase.
+  Omitted for non-batched features.
 
 **Legacy `contract` type:** Cannot be auto-routed. May map to `backend:handler` (api variant)
 or `backend:handler` (event variant). Dispatcher asks user to reclassify. `--migrate-v3`
@@ -732,37 +803,23 @@ explicitly warns about manual reclassification.
 
 **Legacy state mapping (for `--migrate-v3` reclassification):**
 
-Per-C-state mappings (not ranges — ranges are lossy):
+The migration hard-gates: ALL features must be at `done` or `C0` before migration proceeds.
+Mid-loop features (C2–C7) block migration — complete or rollback them first. This eliminates
+the need for approximate mid-loop state mapping tables, which were lossy and error-prone.
 
-| Legacy state | → backend:handler (api) | → backend:handler (event) |
-| ------------ | ----------------------- | ------------------------- |
-| C0           | A0                      | A0                        |
-| C2           | A1 (spec exists)        | A1 (spec exists)          |
-| C3           | A2 (tests written)      | A2 (tests written)        |
-| C4           | A3 (impl done)          | A3 (impl done)            |
-| C5           | A3 (contract tests)     | A3 (impl phase)           |
-| C6           | A3 (impl phase)         | A3 (impl phase)           |
-| C7           | A4 (pre-done)           | A4 (pre-done)             |
+For `C0` features, mapping is trivial — C0 maps to each loop's initial state:
 
-For `read-model` reclassified to frontend types:
-
-| Legacy state | → client (hook) | → client (api-client) | → visual (component) | → visual (page) |
-| ------------ | --------------- | --------------------- | -------------------- | --------------- |
-| C0           | F0              | F0                    | D0                   | D0              |
-| C2           | F1              | F1                    | D1                   | D1              |
-| C3           | F2              | F2                    | D2                   | D2              |
-| C4           | F3              | F3                    | D3                   | D3              |
-| C5           | F3              | F3                    | D3                   | D3              |
-| C6           | F3              | F3                    | D3                   | D3              |
-| C7           | F4              | F4                    | D3                   | D3              |
-
-The mapping is approximate. Display a warning: "State mapped from legacy C-state — review
-the current sub-step before proceeding."
+- `aggregate` C0 → `core:aggregate` C0
+- `contract` C0 → `backend:handler` A0 (ask user: api or event variant)
+- `read-model` C0 → ask user which type, then: F0, D0, etc.
 
 Legacy features at `done` state are unaffected.
 
 **completedFeatures normalization:** Bare IDs normalized to `"{sliceId}/{featureId}"` scoped
-format.
+format. Algorithm: for each bare ID in `completedFeatures`, scan the version's `slices` keys
+to find which slice contains that feature ID. If a bare ID exists in exactly one slice, prefix
+with that slice ID. If a bare ID exists in multiple slices (ambiguous), stop and require
+manual correction — do NOT guess. IDs already containing "/" are left unchanged.
 
 **State code prefixes by loop (loop-complete state in bold):**
 
@@ -771,7 +828,7 @@ format.
   preserved to avoid renumbering existing state.json data. UV = "UAT Verified" — intentionally
   breaks the letter+number convention to signal it's a cross-skill handoff state, not a
   loop-internal state.)_
-- Primitive: L0, L1, L2, L3, **L4** (writes done directly — no feature-integrate)
+- Primitive: L0, L1, L2, **L3** (L3 → full gate → done directly — no L4 state, no feature-integrate)
 - Migration: M0, M1, M2, M3, **M4**
 - Handler: A0, A1, A2, A3, **A4**
 - Persistence: R0, R1, R2, R3, R4, **R5**
@@ -780,9 +837,11 @@ format.
 
 **"done" ownership:**
 
-- `core:primitive` features: `done` written by L-loop directly at L4 (no feature-integrate)
-- `frontend:client` (api-client variant): `done` written by F-loop directly at F4 (no
-  feature-integrate). Typed fetch wrappers have zero integration concerns.
+- `core:primitive` features: `done` written by L-loop directly from L3 after full gate pass
+  (no L4 state, no feature-integrate)
+- `frontend:client` (api-client variant): `done` written by F-loop directly from F3 after
+  full gate pass (no F4 state for api-client, no feature-integrate). Typed fetch wrappers
+  have zero integration concerns.
 - All other types: `done` written by `feature-integrate` only
 
 **Crash recovery:** If `feature-integrate` crashes after writing `done` but before advancing
@@ -791,17 +850,17 @@ to queue advance.
 
 **Loop-complete state → feature-integrate entry mapping:**
 
-| Type                           | Loop-complete state | feature-integrate accepts         |
-| ------------------------------ | ------------------- | --------------------------------- |
-| `core:aggregate`               | C7 (via UV)         | UV (after feature-verify)         |
-| `core:primitive`               | L4                  | N/A (L-loop writes done directly) |
-| `frontend:client` (api-client) | F4                  | N/A (F-loop writes done directly) |
-| `backend:migration`            | M4                  | M4                                |
-| `backend:handler`              | A4                  | A4                                |
-| `backend:persistence`          | R5                  | R5                                |
-| `frontend:client`              | F4                  | F4                                |
-| `frontend:visual`              | D4                  | D4                                |
-| (any type at `done`)           | done                | done (no-op pass-through)         |
+| Type                           | Loop-complete state | feature-integrate accepts                 |
+| ------------------------------ | ------------------- | ----------------------------------------- |
+| `core:aggregate`               | C7 (via UV)         | UV (after feature-verify)                 |
+| `core:primitive`               | L3 → done (direct)  | N/A (L-loop writes done directly from L3) |
+| `frontend:client` (api-client) | F3 → done (direct)  | N/A (F-loop writes done directly from F3) |
+| `backend:migration`            | M4                  | M4                                        |
+| `backend:handler`              | A4                  | A4                                        |
+| `backend:persistence`          | R5                  | R5                                        |
+| `frontend:client` (hook)       | F4                  | F4                                        |
+| `frontend:visual`              | D4                  | D4                                        |
+| (any type at `done`)           | done                | done (no-op pass-through)                 |
 
 **D0** exists only in state.json as the "queued but not yet spec'd" initial state.
 `feature-spec` advances D0 → D1. `feature-implement-visual` never sees D0.
@@ -987,7 +1046,7 @@ SL-002 had 9 spec.md files. Under new taxonomy: ~4. >50% reduction.
 5. Dispatcher reads `feature.type` and routes to one of 7 loops without asking the user
 6. A new session can determine loop, sub-step, and next action from state.json + source files
 7. CLAUDE.md stays under 250 lines after all additions
-8. Expert skills invoked fewer than once per slice on average (exception: ui-design-expert for D0→D1)
+8. Expert skills invoked only where structurally required: `ui-design-expert` at D0→D1 for component variant (1 per component feature), no expert skills for non-visual features
 9. No loop has unbounded branching — variants are documented, finite, and enumerated
 10. D-loop: `feature-spec` owns D0→D1; D-loop code review at D3 before D4
 11. `feature-integrate` owns `done` for all types except `core:primitive` (L-loop) and `frontend:client` api-client variant (F-loop), which write done directly
